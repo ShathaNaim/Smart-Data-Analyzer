@@ -41,6 +41,10 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [columnDetails, setColumnDetails] = useState<ColumnDetails | null>(null);
   const [columnLoading, setColumnLoading] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [askLoading, setAskLoading] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -124,7 +128,39 @@ const handleColumnClick = async (column: string) => {
   }
 };  
       
-      
+  const handleAsk = async () => {
+    if (!result || !question.trim() || askLoading) return;
+
+    setAskLoading(true);
+    setAskError(null);
+    setAnswer("");
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8000/dataset/${result.file_id}/ask`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: question.trim() }),
+        },
+      );
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail || "The agent could not answer this question.");
+      }
+
+      setAnswer(data.answer);
+    } catch (error) {
+      console.error("Error asking the data agent:", error);
+      setAskError(
+        error instanceof Error ? error.message : "Could not connect to the data agent.",
+      );
+    } finally {
+      setAskLoading(false);
+    }
+  };
+        
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-amber-50 px-5 py-10 text-stone-900 sm:px-8 sm:py-16">
@@ -176,6 +212,8 @@ const handleColumnClick = async (column: string) => {
                 setResult(null);
                 setSummary(null);
                 setError(null);
+                setAnswer("");
+                setAskError(null);
               }}
               className="sr-only"
             />
@@ -404,6 +442,85 @@ const handleColumnClick = async (column: string) => {
                   )}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8 rounded-3xl border border-amber-200 bg-white/90 p-5 shadow-[0_24px_70px_-28px_rgba(180,83,9,0.3)] backdrop-blur sm:p-8">
+          <div className="flex items-start gap-4">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-400 text-xl shadow-md shadow-amber-200">
+              ✦
+            </span>
+            <div>
+              <h2 className="text-2xl font-black text-stone-900">Ask your data</h2>
+              <p className="mt-1 text-sm leading-6 text-stone-500">
+                Ask a plain-language question and the agent will analyze your uploaded dataset.
+              </p>
+            </div>
+          </div>
+
+          <form
+            className="mt-6"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleAsk();
+            }}
+          >
+            <label htmlFor="data-question" className="text-sm font-bold text-stone-700">
+              Your question
+            </label>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row">
+              <input
+                id="data-question"
+                type="text"
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                disabled={askLoading}
+                placeholder={
+                  result
+                    ? "Example: Which category has the highest average sales?"
+                    : "Upload a dataset first to ask a question"
+                }
+                className="min-w-0 flex-1 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:bg-stone-100"
+              />
+
+              <button
+                type="submit"
+                disabled={!result || !question.trim() || askLoading}
+                className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-stone-900 px-5 py-3.5 font-bold text-white shadow-lg transition hover:bg-amber-500 hover:text-stone-950 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400 disabled:shadow-none"
+              >
+                {askLoading && (
+                  <span
+                    aria-hidden="true"
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                  />
+                )}
+                {askLoading ? "Thinking..." : "Ask agent"}
+              </button>
+            </div>
+          </form>
+
+          {askLoading && (
+            <div aria-live="polite" className="mt-5 rounded-xl border border-amber-200 bg-yellow-50 px-4 py-3">
+              <p className="font-semibold text-amber-900">The agent is analyzing your data…</p>
+              <p className="mt-1 text-sm text-amber-700">Complex questions may take a few moments.</p>
+            </div>
+          )}
+
+          {askError && (
+            <div role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <p className="font-bold text-red-800">Couldn’t get an answer</p>
+              <p className="mt-1 text-sm text-red-700">{askError}</p>
+            </div>
+          )}
+
+          {answer && !askLoading && (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5" aria-live="polite">
+              <div className="flex items-center gap-2">
+                <span className="grid h-6 w-6 place-items-center rounded-full bg-amber-400 text-xs font-black text-stone-900">✓</span>
+                <h3 className="font-bold text-stone-900">Agent answer</h3>
+              </div>
+              <p className="mt-3 whitespace-pre-wrap leading-7 text-stone-700">{answer}</p>
             </div>
           )}
         </div>
