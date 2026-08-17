@@ -1,136 +1,99 @@
 import os
-import pandas as pd
+import uuid
 
+import pandas as pd
 from fastapi import APIRouter, HTTPException
 
+from backend.schemas.question import (
+    ClarificationResponse,
+    CompletedAnalysisResponse,
+    QuestionRequest,
+)
+from backend.services.analysis_executor import (
+    AnalysisExecutionError,
+    execute_analysis_plan,
+)
+from backend.services.analysis_planner import create_analysis_plan
+
+
 router = APIRouter()
-from backend.schemas.question import QuestionRequest
-from backend.services.data_agent import ask_dataframe
 
 UPLOAD_FOLDER = "backend/uploads"
 
 
-@router.get("/dataset/{file_id}/summary")
-def get_summary(file_id: str):
+@router.post(
+    "/dataset/{file_id}/ask",
+    response_model=ClarificationResponse | CompletedAnalysisResponse,
+)
+def ask_dataset(
+    file_id: str,
+    request: QuestionRequest,
+):
     files = os.listdir(UPLOAD_FOLDER)
 
     matched_file = next(
-        (file for file in files if file.startswith(file_id)),
-        None
+        (
+            filename
+            for filename in files
+            if filename.startswith(file_id)
+        ),
+        None,
     )
 
     if not matched_file:
         raise HTTPException(
             status_code=404,
-            detail="File not found"
+            detail="File not found",
         )
 
-    file_path = os.path.join(UPLOAD_FOLDER, matched_file)
+    file_path = os.path.join(
+        UPLOAD_FOLDER,
+        matched_file,
+    )
 
     if matched_file.endswith(".csv"):
         df = pd.read_csv(file_path)
     else:
         df = pd.read_excel(file_path)
 
-    numeric_summary = (
-    df.describe()
-    .to_dict())
-
-    return {
-        "rows": len(df),
-        "columns": len(df.columns),
-        "column_names": df.columns.tolist(),
-        "data_types": {
-            column: str(dtype)
-            for column, dtype in df.dtypes.items()
-        },
-        "missing_values": df.isnull().sum().to_dict(),
-        "numeric_summary": numeric_summary
-    }
-
-
-@router.get("/dataset/{file_id}/column/{column_name}")
-def get_column_summary(file_id: str, column_name: str):
-    files = os.listdir(UPLOAD_FOLDER)
-
-    matched_file = next(
-        (file for file in files if file.startswith(file_id)),
-        None
+    conversation_id = (
+        request.conversation_id
+        or str(uuid.uuid4())
     )
 
-    if not matched_file:
-        raise HTTPException(
-            status_code=404,
-            detail="File not found"
-        )
-
-    file_path = os.path.join(UPLOAD_FOLDER, matched_file)
-
-    if matched_file.endswith(".csv"):
-        df = pd.read_csv(file_path)
-    else:
-        df = pd.read_excel(file_path)
-
-    if column_name not in df.columns:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Column '{column_name}' not found in the dataset"
-        )
-
-    column_data = df[column_name]
-
-    summary = {
-        "column_name": column_name,
-        "data_type": str(column_data.dtype),
-        "missing_values": int(column_data.isnull().sum()),
-        "unique_values": int(column_data.nunique()),
-        "top_5_values": {
-            str(value): int(count)
-            for value, count in column_data.value_counts().head(5).items()
-        }
-    }
-
-    if pd.api.types.is_numeric_dtype(column_data):
-        mean = column_data.mean()
-        minimum = column_data.min()
-        maximum = column_data.max()
-
-        summary["mean"] = float(mean) if pd.notna(mean) else None
-        summary["min"] = float(minimum) if pd.notna(minimum) else None
-        summary["max"] = float(maximum) if pd.notna(maximum) else None
-
-    return summary
-
-
-
-@router.post("/dataset/{file_id}/ask")
-def ask_dataset(file_id: str, request: QuestionRequest):
-    files = os.listdir(UPLOAD_FOLDER)
-
-    matched_file = next(
-        (file for file in files if file.startswith(file_id)),
-        None
+    # 1. Ask the AI whether it needs clarification or has a plan.
+    decision = create_analysis_plan(
+        df=df,
+        question=request.question,
+        history=request.history,
     )
 
-    if not matched_file:
-        raise HTTPException(
-            status_code=404,
-            detail="File not found"
+    # 2. Return the AI's clarification question without running pandas.
+    if decision.status == "needs_clarification":
+        return ClarificationResponse(
+            conversation_id=conversation_id,
+            message=decision.question,
+            options=decision.options,
+            allow_free_text=True,
         )
 
-    file_path = os.path.join(UPLOAD_FOLDER, matched_file)
+    # 3. The request is clear, so execute the validated plan.
+    try:
+        chart = execute_analysis_plan(
+            df=df,
+            plan=decision.plan,
+        )
+    except AnalysisExecutionError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
 
-    if matched_file.endswith(".csv"):
-        df = pd.read_csv(file_path)
-    else:
-        df = pd.read_excel(file_path)
-
-    answer = ask_dataframe(
-        df,
-        request.question
+    # 4. Return the calculated chart specification to Next.js.
+    return CompletedAnalysisResponse(
+        conversation_id=conversation_id,
+        answer=decision.plan.intent,
+        charts=[chart],
+        assumptions=[],
+        warnings=[],
     )
-
-    return {
-        "question": request.question,
-        "answer": answer
-    }

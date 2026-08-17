@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import ChartRenderer, {
+  type ChartSpec,
+} from "./components/ChartRenderer";
 
 type UploadeResult = {
   file_id: string;
@@ -32,6 +35,26 @@ type ColumnDetails = {
   max?: number | null;
 };
 
+type AskResponse =
+  | {
+      status: "needs_clarification";
+      conversation_id: string;
+      message: string;
+      options: Array<{
+        value: string;
+        label: string;
+      }>;
+      allow_free_text: boolean;
+    }
+  | {
+      status: "complete";
+      conversation_id: string;
+      answer: string;
+      charts: ChartSpec[];
+      assumptions: string[];
+      warnings: string[];
+    };
+
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<UploadeResult | null>(null);
@@ -45,6 +68,7 @@ export default function Home() {
   const [answer, setAnswer] = useState("");
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
+  const [charts, setCharts] = useState<ChartSpec[]>([]);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -134,6 +158,7 @@ const handleColumnClick = async (column: string) => {
     setAskLoading(true);
     setAskError(null);
     setAnswer("");
+    setCharts([]);
 
     try {
       const response = await fetch(
@@ -141,7 +166,11 @@ const handleColumnClick = async (column: string) => {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question: question.trim() }),
+          body: JSON.stringify({
+            question: question.trim(),
+            conversation_id: null,
+            history: [],
+          }),
         },
       );
       const data = await response.json().catch(() => null);
@@ -150,7 +179,15 @@ const handleColumnClick = async (column: string) => {
         throw new Error(data?.detail || "The agent could not answer this question.");
       }
 
-      setAnswer(data.answer);
+      const askResponse = data as AskResponse;
+
+      if (askResponse.status === "needs_clarification") {
+        setAnswer(askResponse.message);
+        return;
+      }
+
+      setAnswer(askResponse.answer);
+      setCharts(askResponse.charts);
     } catch (error) {
       console.error("Error asking the data agent:", error);
       setAskError(
@@ -214,6 +251,7 @@ const handleColumnClick = async (column: string) => {
                 setError(null);
                 setAnswer("");
                 setAskError(null);
+                setCharts([]);
               }}
               className="sr-only"
             />
@@ -521,6 +559,14 @@ const handleColumnClick = async (column: string) => {
                 <h3 className="font-bold text-stone-900">Agent answer</h3>
               </div>
               <p className="mt-3 whitespace-pre-wrap leading-7 text-stone-700">{answer}</p>
+            </div>
+          )}
+
+          {charts.length > 0 && !askLoading && (
+            <div className="space-y-5">
+              {charts.map((chart) => (
+                <ChartRenderer key={chart.id} chart={chart} />
+              ))}
             </div>
           )}
         </div>
