@@ -21,14 +21,8 @@ router = APIRouter()
 UPLOAD_FOLDER = "backend/uploads"
 
 
-@router.post(
-    "/dataset/{file_id}/ask",
-    response_model=ClarificationResponse | CompletedAnalysisResponse,
-)
-def ask_dataset(
-    file_id: str,
-    request: QuestionRequest,
-):
+def load_dataset(file_id: str) -> pd.DataFrame:
+    """Find and load an uploaded dataset by its generated ID."""
     files = os.listdir(UPLOAD_FOLDER)
 
     matched_file = next(
@@ -46,15 +40,75 @@ def ask_dataset(
             detail="File not found",
         )
 
-    file_path = os.path.join(
-        UPLOAD_FOLDER,
-        matched_file,
-    )
+    file_path = os.path.join(UPLOAD_FOLDER, matched_file)
 
     if matched_file.endswith(".csv"):
-        df = pd.read_csv(file_path)
-    else:
-        df = pd.read_excel(file_path)
+        return pd.read_csv(file_path)
+
+    return pd.read_excel(file_path)
+
+
+@router.get("/dataset/{file_id}/summary")
+def get_summary(file_id: str):
+    df = load_dataset(file_id)
+
+    return {
+        "rows": len(df),
+        "columns": len(df.columns),
+        "column_names": df.columns.tolist(),
+        "data_types": {
+            column: str(dtype)
+            for column, dtype in df.dtypes.items()
+        },
+        "missing_values": df.isnull().sum().to_dict(),
+        "numeric_summary": df.describe().to_dict(),
+    }
+
+
+@router.get("/dataset/{file_id}/column/{column_name}")
+def get_column_summary(file_id: str, column_name: str):
+    df = load_dataset(file_id)
+
+    if column_name not in df.columns:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Column '{column_name}' not found in the dataset",
+        )
+
+    column_data = df[column_name]
+
+    summary = {
+        "column_name": column_name,
+        "data_type": str(column_data.dtype),
+        "missing_values": int(column_data.isnull().sum()),
+        "unique_values": int(column_data.nunique()),
+        "top_5_values": {
+            str(value): int(count)
+            for value, count in column_data.value_counts().head(5).items()
+        },
+    }
+
+    if pd.api.types.is_numeric_dtype(column_data):
+        mean = column_data.mean()
+        minimum = column_data.min()
+        maximum = column_data.max()
+
+        summary["mean"] = float(mean) if pd.notna(mean) else None
+        summary["min"] = float(minimum) if pd.notna(minimum) else None
+        summary["max"] = float(maximum) if pd.notna(maximum) else None
+
+    return summary
+
+
+@router.post(
+    "/dataset/{file_id}/ask",
+    response_model=ClarificationResponse | CompletedAnalysisResponse,
+)
+def ask_dataset(
+    file_id: str,
+    request: QuestionRequest,
+):
+    df = load_dataset(file_id)
 
     conversation_id = (
         request.conversation_id

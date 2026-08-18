@@ -42,7 +42,10 @@ Chart-selection rules:
 
 Analysis rules:
 - Use aliases that are short and safe.
-- Do not request more than three dimensions.
+- Every analysis plan must contain exactly one dimension.
+- The dimension is the column used to group values on the X-axis.
+- When the user asks for "X vs Y", use X as the dimension and Y as the measure.
+- When Y is numeric, use mean unless the user requests another aggregation.
 - Do not request more than five measures.
 - Keep row_limit at or below 1000.
 - Mention important assumptions in the plan's intent.

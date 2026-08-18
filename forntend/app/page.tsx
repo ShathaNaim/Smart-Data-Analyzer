@@ -55,6 +55,20 @@ type AskResponse =
       warnings: string[];
     };
 
+type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+type Clarification = {
+  message: string;
+  options: Array<{
+    value: string;
+    label: string;
+  }>;
+  allowFreeText: boolean;
+};
+
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<UploadeResult | null>(null);
@@ -69,6 +83,12 @@ export default function Home() {
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
   const [charts, setCharts] = useState<ChartSpec[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<
+    ConversationMessage[]
+  >([]);
+  const [clarification, setClarification] =
+    useState<Clarification | null>(null);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -76,6 +96,13 @@ export default function Home() {
     setError(null);
     setSummary(null);
     setColumnDetails(null);
+    setConversationId(null);
+    setConversationHistory([]);
+    setClarification(null);
+    setQuestion("");
+    setAnswer("");
+    setCharts([]);
+    setAskError(null);
     const formData = new FormData();
     formData.append("file", file);
 
@@ -152,8 +179,20 @@ const handleColumnClick = async (column: string) => {
   }
 };  
       
-  const handleAsk = async () => {
-    if (!result || !question.trim() || askLoading) return;
+  const handleAsk = async (
+    questionOverride?: string,
+  ) => {
+    const submittedQuestion = (
+      questionOverride ?? question
+    ).trim();
+
+    if (
+      !result ||
+      !submittedQuestion ||
+      askLoading
+    ) {
+      return;
+    }
 
     setAskLoading(true);
     setAskError(null);
@@ -165,39 +204,91 @@ const handleColumnClick = async (column: string) => {
         `http://127.0.0.1:8000/dataset/${result.file_id}/ask`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify({
-            question: question.trim(),
-            conversation_id: null,
-            history: [],
+            question: submittedQuestion,
+            conversation_id: conversationId,
+            history: conversationHistory,
           }),
         },
       );
+
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error(data?.detail || "The agent could not answer this question.");
+        throw new Error(
+          data?.detail ||
+            "The agent could not answer this question.",
+        );
       }
 
       const askResponse = data as AskResponse;
 
-      if (askResponse.status === "needs_clarification") {
-        setAnswer(askResponse.message);
+      setConversationId(askResponse.conversation_id);
+
+      if (
+        askResponse.status ===
+        "needs_clarification"
+      ) {
+        const updatedHistory = ([
+          ...conversationHistory,
+          {
+            role: "user",
+            content: submittedQuestion,
+          },
+          {
+            role: "assistant",
+            content: askResponse.message,
+          },
+        ] satisfies ConversationMessage[]).slice(-10);
+
+        setConversationHistory(updatedHistory);
+
+        setClarification({
+          message: askResponse.message,
+          options: askResponse.options,
+          allowFreeText: askResponse.allow_free_text,
+        });
+
+        setQuestion("");
         return;
       }
 
+      const updatedHistory = ([
+        ...conversationHistory,
+        {
+          role: "user",
+          content: submittedQuestion,
+        },
+        {
+          role: "assistant",
+          content: askResponse.answer,
+        },
+      ] satisfies ConversationMessage[]).slice(-10);
+
+      setConversationHistory(updatedHistory);
+      setClarification(null);
       setAnswer(askResponse.answer);
       setCharts(askResponse.charts);
+      setQuestion("");
     } catch (error) {
-      console.error("Error asking the data agent:", error);
+      console.error(
+        "Error asking the data agent:",
+        error,
+      );
+
       setAskError(
-        error instanceof Error ? error.message : "Could not connect to the data agent.",
+        error instanceof Error
+          ? error.message
+          : "Could not connect to the data agent.",
       );
     } finally {
       setAskLoading(false);
     }
   };
-        
+          
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-amber-50 px-5 py-10 text-stone-900 sm:px-8 sm:py-16">
@@ -505,7 +596,7 @@ const handleColumnClick = async (column: string) => {
             }}
           >
             <label htmlFor="data-question" className="text-sm font-bold text-stone-700">
-              Your question
+              {clarification ? "Your clarification" : "Your question"}
             </label>
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
               <input
@@ -515,9 +606,11 @@ const handleColumnClick = async (column: string) => {
                 onChange={(event) => setQuestion(event.target.value)}
                 disabled={askLoading}
                 placeholder={
-                  result
-                    ? "Example: Which category has the highest average sales?"
-                    : "Upload a dataset first to ask a question"
+                  !result
+                    ? "Upload a dataset first to ask a question"
+                    : clarification
+                      ? "Type your clarification..."
+                      : "Example: Which category has the highest average sales?"
                 }
                 className="min-w-0 flex-1 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3.5 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-100 disabled:cursor-not-allowed disabled:bg-stone-100"
               />
@@ -533,10 +626,50 @@ const handleColumnClick = async (column: string) => {
                     className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
                   />
                 )}
-                {askLoading ? "Thinking..." : "Ask agent"}
+                {askLoading
+                  ? "Thinking..."
+                  : clarification
+                    ? "Continue"
+                    : "Ask agent"}
               </button>
             </div>
           </form>
+
+          {clarification && !askLoading && (
+            <div
+              className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-5"
+              aria-live="polite"
+            >
+              <p className="text-xs font-bold uppercase tracking-widest text-sky-700">
+                Clarification needed
+              </p>
+              <p className="mt-2 font-semibold text-stone-900">
+                {clarification.message}
+              </p>
+
+              {clarification.options.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {clarification.options.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={askLoading}
+                      onClick={() => void handleAsk(option.value)}
+                      className="rounded-lg border border-sky-300 bg-white px-4 py-2 text-sm font-semibold text-sky-800 transition hover:bg-sky-100 focus:outline-none focus:ring-4 focus:ring-sky-100 disabled:opacity-50"
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {clarification.allowFreeText && (
+                <p className="mt-3 text-sm text-stone-600">
+                  Select an option or type your answer above.
+                </p>
+              )}
+            </div>
+          )}
 
           {askLoading && (
             <div aria-live="polite" className="mt-5 rounded-xl border border-amber-200 bg-yellow-50 px-4 py-3">
