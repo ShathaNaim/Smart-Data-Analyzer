@@ -83,6 +83,8 @@ export default function Home() {
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
   const [charts, setCharts] = useState<ChartSpec[]>([]);
+  const [assumptions, setAssumptions] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<
     ConversationMessage[]
@@ -102,6 +104,8 @@ export default function Home() {
     setQuestion("");
     setAnswer("");
     setCharts([]);
+    setAssumptions([]);
+    setWarnings([]);
     setAskError(null);
     const formData = new FormData();
     formData.append("file", file);
@@ -198,6 +202,8 @@ const handleColumnClick = async (column: string) => {
     setAskError(null);
     setAnswer("");
     setCharts([]);
+    setAssumptions([]);
+    setWarnings([]);
 
     try {
       const response = await fetch(
@@ -272,6 +278,8 @@ const handleColumnClick = async (column: string) => {
       setClarification(null);
       setAnswer(askResponse.answer);
       setCharts(askResponse.charts);
+      setAssumptions(askResponse.assumptions);
+      setWarnings(askResponse.warnings);
       setQuestion("");
     } catch (error) {
       console.error(
@@ -343,6 +351,8 @@ const handleColumnClick = async (column: string) => {
                 setAnswer("");
                 setAskError(null);
                 setCharts([]);
+                setAssumptions([]);
+                setWarnings([]);
               }}
               className="sr-only"
             />
@@ -692,6 +702,31 @@ const handleColumnClick = async (column: string) => {
                 <h3 className="font-bold text-stone-900">Agent answer</h3>
               </div>
               <p className="mt-3 whitespace-pre-wrap leading-7 text-stone-700">{answer}</p>
+            </div>
+          )}
+
+          {assumptions.length > 0 && !askLoading && (
+            <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-5">
+              <h3 className="font-bold text-sky-900">Assumptions</h3>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-sky-900">
+                {assumptions.map((assumption, index) => (
+                  <li key={`${index}-${assumption}`}>{assumption}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {warnings.length > 0 && !askLoading && (
+            <div
+              className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-5"
+              role="status"
+            >
+              <h3 className="font-bold text-orange-900">Data warnings</h3>
+              <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-orange-900">
+                {warnings.map((warning, index) => (
+                  <li key={`${index}-${warning}`}>{warning}</li>
+                ))}
+              </ul>
             </div>
           )}
 

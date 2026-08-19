@@ -190,6 +190,11 @@ class AnalysisPlan(StrictSchema):
         "pie",
     ]
 
+    assumptions: list[str] = Field(
+                default_factory=list,
+                max_length=10,
+            )
+
     @model_validator(mode="after")
     def validate_chart_requirements(self) -> AnalysisPlan:
 

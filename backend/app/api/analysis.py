@@ -14,6 +14,7 @@ from backend.services.analysis_executor import (
     execute_analysis_plan,
 )
 from backend.services.analysis_planner import create_analysis_plan
+from backend.services.insight_generator import generate_chart_insight
 
 
 router = APIRouter()
@@ -137,6 +138,8 @@ def ask_dataset(
             df=df,
             plan=decision.plan,
         )
+        answer = generate_chart_insight(chart)
+        
     except AnalysisExecutionError as error:
         raise HTTPException(
             status_code=422,
@@ -146,8 +149,8 @@ def ask_dataset(
     # 4. Return the calculated chart specification to Next.js.
     return CompletedAnalysisResponse(
         conversation_id=conversation_id,
-        answer=decision.plan.intent,
+        answer=answer,
         charts=[chart],
-        assumptions=[],
+        assumptions=decision.plan.assumptions,
         warnings=[],
     )
