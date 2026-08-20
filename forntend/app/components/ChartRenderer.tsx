@@ -47,6 +47,7 @@ export type ChartSpec = {
 
 type ChartRendererProps = {
   chart: ChartSpec;
+  colors?: string[];
 };
 
 // Put shared colors outside the component.
@@ -61,6 +62,7 @@ const CHART_COLORS = [
 
 export default function ChartRenderer({
   chart,
+  colors = CHART_COLORS,
 }: ChartRendererProps) {
   // This variable will contain the selected Recharts chart.
   let renderedChart: React.ReactNode;
@@ -101,8 +103,8 @@ export default function ChartRenderer({
               dataKey={series.key}
               name={series.label}
               fill={
-                CHART_COLORS[
-                  index % CHART_COLORS.length
+                colors[
+                  index % colors.length
                 ]
               }
               radius={[6, 6, 0, 0]}
@@ -148,8 +150,8 @@ export default function ChartRenderer({
               dataKey={series.key}
               name={series.label}
               stroke={
-                CHART_COLORS[
-                  index % CHART_COLORS.length
+                colors[
+                  index % colors.length
                 ]
               }
               strokeWidth={3}
@@ -196,13 +198,13 @@ export default function ChartRenderer({
               dataKey={series.key}
               name={series.label}
               stroke={
-                CHART_COLORS[
-                  index % CHART_COLORS.length
+                colors[
+                  index % colors.length
                 ]
               }
               fill={
-                CHART_COLORS[
-                  index % CHART_COLORS.length
+                colors[
+                  index % colors.length
                 ]
               }
               fillOpacity={0.25}
@@ -233,8 +235,8 @@ export default function ChartRenderer({
               <Cell
                 key={`${chart.id}-${index}`}
                 fill={
-                  CHART_COLORS[
-                    index % CHART_COLORS.length
+                  colors[
+                    index % colors.length
                   ]
                 }
               />

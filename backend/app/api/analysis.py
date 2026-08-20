@@ -15,6 +15,8 @@ from backend.services.analysis_executor import (
 )
 from backend.services.analysis_planner import create_analysis_plan
 from backend.services.insight_generator import generate_chart_insight
+from backend.services.insight_polisher import polish_chart_insight
+from backend.services.warning_generator import generate_analysis_warnings
 
 
 router = APIRouter()
@@ -138,8 +140,20 @@ def ask_dataset(
             df=df,
             plan=decision.plan,
         )
-        answer = generate_chart_insight(chart)
-        
+        draft_answer = generate_chart_insight(chart)
+        warnings = generate_analysis_warnings(
+            df=df,
+            plan=decision.plan,
+            chart=chart,
+        )
+        answer = polish_chart_insight(
+            question=request.question,
+            chart=chart,
+            draft=draft_answer,
+            assumptions=decision.plan.assumptions,
+            warnings=warnings,
+        )
+
     except AnalysisExecutionError as error:
         raise HTTPException(
             status_code=422,
@@ -152,5 +166,5 @@ def ask_dataset(
         answer=answer,
         charts=[chart],
         assumptions=decision.plan.assumptions,
-        warnings=[],
+        warnings=warnings,
     )

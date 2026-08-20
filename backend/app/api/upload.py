@@ -2,7 +2,11 @@ import pandas as pd
 import os
 import shutil
 import uuid
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
+from backend.database import get_db
+from backend.models.dataset import Dataset
 from fastapi import APIRouter, UploadFile, File, HTTPException
 
 router = APIRouter()
@@ -12,12 +16,10 @@ router = APIRouter()
 UPLOAD_FOLDER = "backend/uploads"
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    if not file.filename.endswith((".csv", ".xlsx")):
-        raise HTTPException(
-            status_code=400,
-            detail="Only CSV and Excel files are supported"
-        )
+async def upload_file(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+): 
 
     file_id = str(uuid.uuid4())
 
@@ -37,6 +39,25 @@ async def upload_file(file: UploadFile = File(...)):
         df = pd.read_csv(file_path)
     else:
         df = pd.read_excel(file_path)
+
+    dataset = Dataset(
+    id=uuid.UUID(file_id),
+    original_filename=file.filename,
+    stored_filename=saved_filename,
+    extension=extension,
+    file_size=os.path.getsize(file_path),
+    row_count=len(df),
+    columns=[str(column) for column in df.columns],
+)
+    try:
+        db.add(dataset)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save dataset metadata to the database.",
+        )
 
     return {
         "file_id": file_id,

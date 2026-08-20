@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ChartRenderer, {
   type ChartSpec,
 } from "./components/ChartRenderer";
@@ -69,7 +70,25 @@ type Clarification = {
   allowFreeText: boolean;
 };
 
+type SavedDashboardItem = {
+  id: string;
+  title: string;
+  chart_spec: ChartSpec;
+  color_config: Record<string, string>;
+  position_x: number;
+  position_y: number;
+  width: number;
+  height: number;
+};
+
+type SavedDashboard = {
+  id: string;
+  name: string;
+  items: SavedDashboardItem[];
+};
+
 export default function Home() {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<UploadeResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -91,6 +110,129 @@ export default function Home() {
   >([]);
   const [clarification, setClarification] =
     useState<Clarification | null>(null);
+  const [addingChartId, setAddingChartId] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [analysisRestored, setAnalysisRestored] = useState(false);
+
+  const handleAddToDashboard = async (chart: ChartSpec) => {
+    if (!result || addingChartId) return;
+
+    setAddingChartId(chart.id);
+    setDashboardError(null);
+
+    const dashboardStorageKey = `dashboard:${result.file_id}`;
+
+    try {
+      const storedDashboardId = sessionStorage.getItem(dashboardStorageKey);
+      let currentDashboard: SavedDashboard | null = null;
+
+      if (storedDashboardId) {
+        const response = await fetch(
+          `http://127.0.0.1:8000/dashboards/${storedDashboardId}`,
+        );
+        const data = await response.json();
+
+        if (response.ok) {
+          currentDashboard = data;
+        } else if (response.status === 404) {
+          sessionStorage.removeItem(dashboardStorageKey);
+        } else {
+          throw new Error(data.detail || "Could not load the dashboard.");
+        }
+      }
+
+      if (!currentDashboard) {
+        const response = await fetch(
+          "http://127.0.0.1:8000/dashboards",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              dataset_id: result.file_id,
+              name: `${result.filename} dashboard`,
+            }),
+          },
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || "Could not create the dashboard.");
+        }
+
+        currentDashboard = data;
+        sessionStorage.setItem(dashboardStorageKey, data.id);
+      }
+
+      if (!currentDashboard) {
+        throw new Error("Could not prepare the dashboard.");
+      }
+
+      const dashboard = currentDashboard;
+      const existingItems = dashboard.items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        chart_spec: item.chart_spec,
+        color_config: item.color_config,
+        position_x: item.position_x,
+        position_y: item.position_y,
+        width: item.width,
+        height: item.height,
+      }));
+      const chartAlreadyAdded = existingItems.some(
+        (item) => item.chart_spec.id === chart.id,
+      );
+      const nextPositionY = existingItems.reduce(
+        (lowestRow, item) =>
+          Math.max(lowestRow, item.position_y + item.height),
+        0,
+      );
+      const items = chartAlreadyAdded
+        ? existingItems
+        : [
+            ...existingItems,
+            {
+              id: null,
+              title: chart.title,
+              chart_spec: chart,
+              color_config: { primary: "#f59e0b" },
+              position_x: 0,
+              position_y: nextPositionY,
+              width: 6,
+              height: 4,
+            },
+          ];
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/dashboards/${dashboard.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: dashboard.name,
+            items,
+          }),
+        },
+      );
+      const savedDashboard = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          savedDashboard.detail || "Could not add the chart to the dashboard.",
+        );
+      }
+
+      sessionStorage.setItem(dashboardStorageKey, savedDashboard.id);
+      router.push(`/dashboard/${savedDashboard.id}`);
+    } catch (error) {
+      setDashboardError(
+        error instanceof Error
+          ? error.message
+          : "Could not add the chart to the dashboard.",
+      );
+    } finally {
+      setAddingChartId(null);
+    }
+  };
 
   const handleUpload = async () => {
     if (!file) return;
@@ -127,6 +269,56 @@ export default function Home() {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    const restoreTimer = window.setTimeout(() => {
+      const stored = sessionStorage.getItem("currentAnalysis");
+
+      if (stored) {
+        try {
+          const analysis = JSON.parse(stored);
+
+          setResult(analysis.result ?? null);
+          setCharts(analysis.charts ?? []);
+          setAnswer(analysis.answer ?? "");
+          setAssumptions(analysis.assumptions ?? []);
+          setWarnings(analysis.warnings ?? []);
+        } catch {
+          sessionStorage.removeItem("currentAnalysis");
+        }
+      }
+
+      setAnalysisRestored(true);
+    }, 0);
+
+    return () => window.clearTimeout(restoreTimer);
+  }, []);
+
+  useEffect(() => {
+    if (!analysisRestored) return;
+
+    if (!result) {
+      sessionStorage.removeItem("currentAnalysis");
+      return;
+    }
+
+    sessionStorage.setItem(
+      "currentAnalysis",
+      JSON.stringify({
+        result,
+        charts,
+        answer,
+        assumptions,
+        warnings,
+      }),
+    );
+  }, [
+    analysisRestored,
+    result,
+    charts,
+    answer,
+    assumptions,
+    warnings,
+  ]);
 
   const handleSummary = async () => {
     if (!result) return;
@@ -733,8 +925,28 @@ const handleColumnClick = async (column: string) => {
           {charts.length > 0 && !askLoading && (
             <div className="space-y-5">
               {charts.map((chart) => (
-                <ChartRenderer key={chart.id} chart={chart} />
+                <div key={chart.id}>
+                  <ChartRenderer chart={chart} />
+                  <button
+                    type="button"
+                    onClick={() => void handleAddToDashboard(chart)}
+                    disabled={addingChartId !== null}
+                    className="mt-3 w-full rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-wait disabled:bg-stone-300"
+                  >
+                    {addingChartId === chart.id
+                      ? "Adding to dashboard..."
+                      : "Add to dashboard"}
+                  </button>
+                </div>
               ))}
+              {dashboardError && (
+                <p
+                  role="alert"
+                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                >
+                  {dashboardError}
+                </p>
+              )}
             </div>
           )}
         </div>
