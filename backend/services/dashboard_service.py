@@ -92,7 +92,17 @@ def save_dashboard(
             submitted_ids.add(item_data.id)
 
         item.title = item_data.title
-        item.chart_spec = item_data.chart_spec.model_dump(mode="json")
+        item.item_type = item_data.item_type
+        item.chart_spec = (
+            item_data.chart_spec.model_dump(mode="json")
+            if item_data.chart_spec is not None
+            else None
+        )
+        item.kpi_spec = (
+            item_data.kpi_spec.model_dump(mode="json")
+            if item_data.kpi_spec is not None
+            else None
+        )
         item.color_config = item_data.color_config
         item.position_x = item_data.position_x
         item.position_y = item_data.position_y

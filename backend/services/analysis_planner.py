@@ -26,6 +26,15 @@ You may only reference columns included in the dataset metadata.
 - Include important interpretations in the plan's assumptions list.
 - Do not include obvious facts as assumptions.
 - Return an empty assumptions list when no assumptions were required.
+Output-selection rules:
+- Select "kpi" when the request can be answered by one aggregate numeric value.
+- Select "chart" when the request requires categories, time periods, comparisons,
+  distributions, or multiple plotted values.
+- "What is total revenue?" should produce a KPI.
+- "Revenue by region" should produce a chart.
+- "Revenue over time" should produce a chart.
+- If the user explicitly asks for a KPI or card, select KPI.
+- Do not force a dimension into a KPI plan.
 
 Clarification rules:
 - Ask only when ambiguity could materially change the analysis.
@@ -42,6 +51,18 @@ Chart-selection rules:
 - Use area charts for volume trends over time when appropriate.
 - Use pie charts only for one measure across a small number of categories.
 - Do not select scatter or table because they are not supported yet.
+KPI rules:
+- A KPI must produce exactly one numeric value.
+- Select exactly one measure.
+- KPI plans must not contain dimensions, grouping, sorting, or row limits.
+- Use only supported aggregations: sum, mean, median, min, max, count, nunique.
+- Use count for the number of non-null records in a column.
+- Use nunique for distinct entities such as customers, products, or orders.
+- Add filters only when requested or clearly required.
+- Never invent business formulas.
+- Ask for clarification when terms such as revenue, profit, active, growth,
+  or conversion cannot be mapped reliably to available columns.
+- Suggest a number format based on metadata, but do not invent a currency code.
 
 Analysis rules:
 - Use aliases that are short and safe.

@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import ChartRenderer, {
   type ChartSpec,
 } from "./components/ChartRenderer";
+import KpiCard, {
+  type KpiSpec,
+} from "./components/KpiCard";
+
+import type {
+  AnalysisSuggestions,
+  ChartSuggestion,
+  KpiSuggestion,
+  SuggestionPreviewResponse,
+} from "./types/analysisSuggestions";
+
 
 type UploadeResult = {
   file_id: string;
@@ -52,6 +63,7 @@ type AskResponse =
       conversation_id: string;
       answer: string;
       charts: ChartSpec[];
+      kpis: KpiSpec[];
       assumptions: string[];
       warnings: string[];
     };
@@ -73,7 +85,9 @@ type Clarification = {
 type SavedDashboardItem = {
   id: string;
   title: string;
-  chart_spec: ChartSpec;
+  item_type: "chart" | "kpi";
+  chart_spec: ChartSpec | null;
+  kpi_spec: KpiSpec | null;
   color_config: Record<string, string>;
   position_x: number;
   position_y: number;
@@ -102,6 +116,7 @@ export default function Home() {
   const [askLoading, setAskLoading] = useState(false);
   const [askError, setAskError] = useState<string | null>(null);
   const [charts, setCharts] = useState<ChartSpec[]>([]);
+  const [kpis, setKpis] = useState<KpiSpec[]>([]);
   const [assumptions, setAssumptions] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -110,14 +125,28 @@ export default function Home() {
   >([]);
   const [clarification, setClarification] =
     useState<Clarification | null>(null);
-  const [addingChartId, setAddingChartId] = useState<string | null>(null);
+  const [addingItemId, setAddingItemId] = useState<string | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [analysisRestored, setAnalysisRestored] = useState(false);
+  const [suggestions, setSuggestions] =useState<AnalysisSuggestions | null>(null);
 
-  const handleAddToDashboard = async (chart: ChartSpec) => {
-    if (!result || addingChartId) return;
+  const [suggestionsLoading, setSuggestionsLoading] =useState(false);
+  const [previewingSuggestionId,setPreviewingSuggestionId,] = useState<string | null>(null);
+  const [suggestionPreviewError,setSuggestionPreviewError,] = useState<string | null>(null);
 
-    setAddingChartId(chart.id);
+  const [suggestionsError, setSuggestionsError] =useState<string | null>(null);
+
+  const handleAddToDashboard = async (
+    dashboardItem:
+      | { type: "chart"; spec: ChartSpec }
+      | { type: "kpi"; spec: KpiSpec },
+  ) => {
+    if (!result || addingItemId) return;
+
+    const itemId = dashboardItem.spec.id;
+    const itemTitle = dashboardItem.spec.title;
+
+    setAddingItemId(itemId);
     setDashboardError(null);
 
     const dashboardStorageKey = `dashboard:${result.file_id}`;
@@ -171,34 +200,42 @@ export default function Home() {
       const existingItems = dashboard.items.map((item) => ({
         id: item.id,
         title: item.title,
+        item_type: item.item_type,
         chart_spec: item.chart_spec,
+        kpi_spec: item.kpi_spec,
         color_config: item.color_config,
         position_x: item.position_x,
         position_y: item.position_y,
         width: item.width,
         height: item.height,
       }));
-      const chartAlreadyAdded = existingItems.some(
-        (item) => item.chart_spec.id === chart.id,
+      const itemAlreadyAdded = existingItems.some(
+        (item) =>
+          item.item_type === dashboardItem.type &&
+          (item.chart_spec?.id === itemId || item.kpi_spec?.id === itemId),
       );
       const nextPositionY = existingItems.reduce(
         (lowestRow, item) =>
           Math.max(lowestRow, item.position_y + item.height),
         0,
       );
-      const items = chartAlreadyAdded
+      const items = itemAlreadyAdded
         ? existingItems
         : [
             ...existingItems,
             {
               id: null,
-              title: chart.title,
-              chart_spec: chart,
+              title: itemTitle,
+              item_type: dashboardItem.type,
+              chart_spec:
+                dashboardItem.type === "chart" ? dashboardItem.spec : null,
+              kpi_spec:
+                dashboardItem.type === "kpi" ? dashboardItem.spec : null,
               color_config: { primary: "#f59e0b" },
               position_x: 0,
               position_y: nextPositionY,
-              width: 6,
-              height: 4,
+              width: dashboardItem.type === "chart" ? 6 : 3,
+              height: dashboardItem.type === "chart" ? 4 : 2,
             },
           ];
 
@@ -217,7 +254,7 @@ export default function Home() {
 
       if (!response.ok) {
         throw new Error(
-          savedDashboard.detail || "Could not add the chart to the dashboard.",
+          savedDashboard.detail || "Could not add the item to the dashboard.",
         );
       }
 
@@ -227,12 +264,49 @@ export default function Home() {
       setDashboardError(
         error instanceof Error
           ? error.message
-          : "Could not add the chart to the dashboard.",
+          : "Could not add the item to the dashboard.",
       );
     } finally {
-      setAddingChartId(null);
+      setAddingItemId(null);
     }
   };
+  const handleGenerateSuggestions = async () => {
+  if (!result || suggestionsLoading) {
+    return;
+  }
+
+  setSuggestionsLoading(true);
+  setSuggestionsError(null);
+  setSuggestions(null);
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:8000/dataset/${result.file_id}/analysis-suggestions`,
+      {
+        method: "POST",
+      },
+    );
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        data?.detail ||
+          "Could not generate analysis suggestions.",
+      );
+    }
+
+    setSuggestions(data as AnalysisSuggestions);
+  } catch (error) {
+    setSuggestionsError(
+      error instanceof Error
+        ? error.message
+        : "Could not connect to the suggestion service.",
+    );
+  } finally {
+    setSuggestionsLoading(false);
+  }
+};
 
   const handleUpload = async () => {
     if (!file) return;
@@ -246,9 +320,12 @@ export default function Home() {
     setQuestion("");
     setAnswer("");
     setCharts([]);
+    setKpis([]);
     setAssumptions([]);
     setWarnings([]);
     setAskError(null);
+    setSuggestions(null);
+    setSuggestionsError(null);
     const formData = new FormData();
     formData.append("file", file);
 
@@ -279,9 +356,11 @@ export default function Home() {
 
           setResult(analysis.result ?? null);
           setCharts(analysis.charts ?? []);
+          setKpis(analysis.kpis ?? []);
           setAnswer(analysis.answer ?? "");
           setAssumptions(analysis.assumptions ?? []);
           setWarnings(analysis.warnings ?? []);
+          setSuggestions(analysis.suggestions ?? null);
         } catch {
           sessionStorage.removeItem("currentAnalysis");
         }
@@ -306,18 +385,22 @@ export default function Home() {
       JSON.stringify({
         result,
         charts,
+        kpis,
         answer,
         assumptions,
         warnings,
+        suggestions,
       }),
     );
   }, [
     analysisRestored,
     result,
     charts,
+    kpis,
     answer,
     assumptions,
     warnings,
+    suggestions,
   ]);
 
   const handleSummary = async () => {
@@ -394,6 +477,7 @@ const handleColumnClick = async (column: string) => {
     setAskError(null);
     setAnswer("");
     setCharts([]);
+    setKpis([]);
     setAssumptions([]);
     setWarnings([]);
 
@@ -470,6 +554,7 @@ const handleColumnClick = async (column: string) => {
       setClarification(null);
       setAnswer(askResponse.answer);
       setCharts(askResponse.charts);
+      setKpis(askResponse.kpis);
       setAssumptions(askResponse.assumptions);
       setWarnings(askResponse.warnings);
       setQuestion("");
@@ -488,6 +573,97 @@ const handleColumnClick = async (column: string) => {
       setAskLoading(false);
     }
   };
+
+  const handleRunSuggestion = async (
+  selected:
+    | {
+        type: "kpi";
+        suggestion: KpiSuggestion;
+      }
+    | {
+        type: "chart";
+        suggestion: ChartSuggestion;
+      },
+) => {
+  if (
+    !result ||
+    previewingSuggestionId !== null
+  ) {
+    return;
+  }
+
+  const { suggestion } = selected;
+
+  setPreviewingSuggestionId(suggestion.id);
+  setSuggestionPreviewError(null);
+  setAskError(null);
+
+  try {
+    const requestBody =
+      selected.type === "kpi"
+        ? {
+            output_type: "kpi" as const,
+            chart_plan: null,
+            kpi_plan: selected.suggestion.plan,
+          }
+        : {
+            output_type: "chart" as const,
+            chart_plan: selected.suggestion.plan,
+            kpi_plan: null,
+          };
+
+    const response = await fetch(
+      `http://127.0.0.1:8000/dataset/${result.file_id}/suggestion-preview`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      },
+    );
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        data?.detail ||
+          "Could not calculate the selected suggestion.",
+      );
+    }
+
+    const preview = data as SuggestionPreviewResponse;
+
+    if (preview.output_type !== selected.type) {
+      throw new Error(
+        "The preview result did not match the selected suggestion.",
+      );
+    }
+
+    if (preview.output_type === "kpi") {
+      setKpis([preview.kpi]);
+      setCharts([]);
+    } else {
+      setCharts([preview.chart]);
+      setKpis([]);
+    }
+
+    setAnswer(
+      `${suggestion.title}\n\n${suggestion.reason}`,
+    );
+
+    setAssumptions(suggestion.plan.assumptions);
+    setWarnings(preview.warnings);
+  } catch (error) {
+    setSuggestionPreviewError(
+      error instanceof Error
+        ? error.message
+        : "Could not connect to the preview service.",
+    );
+  } finally {
+    setPreviewingSuggestionId(null);
+  }
+};
           
 
   return (
@@ -543,6 +719,7 @@ const handleColumnClick = async (column: string) => {
                 setAnswer("");
                 setAskError(null);
                 setCharts([]);
+                setKpis([]);
                 setAssumptions([]);
                 setWarnings([]);
               }}
@@ -790,6 +967,174 @@ const handleColumnClick = async (column: string) => {
             </div>
           </div>
 
+          <div className="mt-6 rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-bold text-violet-950">
+                  AI analysis suggestions
+                </h3>
+                <p className="mt-1 text-sm leading-6 text-violet-700">
+                  Let the agent study the meaning of your columns and recommend
+                  useful KPI cards and charts.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleGenerateSuggestions()}
+                disabled={!result || suggestionsLoading}
+                className="shrink-0 rounded-xl bg-violet-700 px-5 py-3 font-bold text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+              >
+                {suggestionsLoading
+                  ? "Studying dataset..."
+                  : suggestions
+                    ? "Regenerate suggestions"
+                    : "Suggest analyses"}
+              </button>
+            </div>
+
+            {suggestionsLoading && (
+              <div
+                className="mt-4 rounded-xl border border-violet-200 bg-white px-4 py-3"
+                aria-live="polite"
+              >
+                <p className="font-semibold text-violet-900">
+                  The AI is studying your dataset...
+                </p>
+                <p className="mt-1 text-sm text-violet-600">
+                  It is identifying column meanings and useful analytical roles.
+                </p>
+              </div>
+            )}
+
+            {suggestionsError && (
+              <p
+                role="alert"
+                className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+              >
+                {suggestionsError}
+              </p>
+            )}
+
+            {suggestions && !suggestionsLoading && (
+              <div className="mt-5 space-y-5">
+                <p className="text-sm leading-6 text-violet-900">
+                  {suggestions.summary}
+                </p>
+
+                {suggestionPreviewError && (
+                  <p
+                    role="alert"
+                    className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+                  >
+                    {suggestionPreviewError}
+                  </p>
+                )}
+
+                {suggestions.kpi_suggestions.length > 0 && (
+                  <section>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-violet-800">
+                      Suggested KPIs
+                    </h4>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {suggestions.kpi_suggestions.map((suggestion) => (
+                        <article
+                          key={suggestion.id}
+                          className="rounded-xl border border-violet-200 bg-white p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <h5 className="font-bold text-stone-900">
+                              {suggestion.title}
+                            </h5>
+                            <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700">
+                              {Math.round(suggestion.confidence * 100)}%
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-stone-600">
+                            {suggestion.reason}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleRunSuggestion({
+                                type: "kpi",
+                                suggestion,
+                              })
+                            }
+                            disabled={previewingSuggestionId !== null}
+                            className="mt-4 w-full rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-violet-800 disabled:cursor-wait disabled:bg-stone-300"
+                          >
+                            {previewingSuggestionId === suggestion.id
+                              ? "Running analysis..."
+                              : "Run analysis"}
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {suggestions.chart_suggestions.length > 0 && (
+                  <section>
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-violet-800">
+                      Suggested charts
+                    </h4>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {suggestions.chart_suggestions.map((suggestion) => (
+                        <article
+                          key={suggestion.id}
+                          className="rounded-xl border border-violet-200 bg-white p-4"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <h5 className="font-bold text-stone-900">
+                              {suggestion.title}
+                            </h5>
+                            <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700">
+                              {Math.round(suggestion.confidence * 100)}%
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-stone-600">
+                            {suggestion.reason}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleRunSuggestion({
+                                type: "chart",
+                                suggestion,
+                              })
+                            }
+                            disabled={previewingSuggestionId !== null}
+                            className="mt-4 w-full rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-violet-800 disabled:cursor-wait disabled:bg-stone-300"
+                          >
+                            {previewingSuggestionId === suggestion.id
+                              ? "Running analysis..."
+                              : "Run analysis"}
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {suggestions.warnings.length > 0 && (
+                  <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+                    <h4 className="font-bold text-orange-900">
+                      Suggestion warnings
+                    </h4>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-orange-800">
+                      {suggestions.warnings.map((warning, index) => (
+                        <li key={`${index}-${warning}`}>
+                          {warning}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <form
             className="mt-6"
             onSubmit={(event) => {
@@ -922,6 +1267,28 @@ const handleColumnClick = async (column: string) => {
             </div>
           )}
 
+          {kpis.length > 0 && !askLoading && (
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {kpis.map((kpi) => (
+                <div key={kpi.id}>
+                  <KpiCard kpi={kpi} />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleAddToDashboard({ type: "kpi", spec: kpi })
+                    }
+                    disabled={addingItemId !== null}
+                    className="mt-3 w-full rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-wait disabled:bg-stone-300"
+                  >
+                    {addingItemId === kpi.id
+                      ? "Adding to dashboard..."
+                      : "Add to dashboard"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {charts.length > 0 && !askLoading && (
             <div className="space-y-5">
               {charts.map((chart) => (
@@ -929,25 +1296,28 @@ const handleColumnClick = async (column: string) => {
                   <ChartRenderer chart={chart} />
                   <button
                     type="button"
-                    onClick={() => void handleAddToDashboard(chart)}
-                    disabled={addingChartId !== null}
+                    onClick={() =>
+                      void handleAddToDashboard({ type: "chart", spec: chart })
+                    }
+                    disabled={addingItemId !== null}
                     className="mt-3 w-full rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-wait disabled:bg-stone-300"
                   >
-                    {addingChartId === chart.id
+                    {addingItemId === chart.id
                       ? "Adding to dashboard..."
                       : "Add to dashboard"}
                   </button>
                 </div>
               ))}
-              {dashboardError && (
-                <p
-                  role="alert"
-                  className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-                >
-                  {dashboardError}
-                </p>
-              )}
             </div>
+          )}
+
+          {dashboardError && !askLoading && (
+            <p
+              role="alert"
+              className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+            >
+              {dashboardError}
+            </p>
           )}
         </div>
       </section>

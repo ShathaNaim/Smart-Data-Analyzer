@@ -16,8 +16,23 @@ from backend.services.analysis_executor import (
 from backend.services.analysis_planner import create_analysis_plan
 from backend.services.insight_generator import generate_chart_insight
 from backend.services.insight_polisher import polish_chart_insight
+from backend.services.kpi_executor import execute_kpi_plan
 from backend.services.warning_generator import generate_analysis_warnings
-
+from backend.services.kpi_executor import execute_kpi_plan
+from backend.schemas.semantic_profile import SemanticDatasetProfile
+from backend.services.semantic_profiler import (
+    SemanticProfileError,
+    create_semantic_profile,
+)
+from backend.schemas.analysis_suggestion import AnalysisSuggestions
+from backend.services.analysis_suggester import (
+    SuggestionGenerationError,
+    generate_analysis_suggestions,
+)
+from backend.schemas.suggestion_preview import (
+    SuggestionPreviewRequest,
+    SuggestionPreviewResponse,
+)
 
 router = APIRouter()
 
@@ -66,6 +81,30 @@ def get_summary(file_id: str):
         "missing_values": df.isnull().sum().to_dict(),
         "numeric_summary": df.describe().to_dict(),
     }
+
+
+@router.post(
+    "/dataset/{file_id}/semantic-profile",
+    response_model=SemanticDatasetProfile,
+)
+def get_semantic_profile(
+    file_id: str,
+) -> SemanticDatasetProfile:
+    """
+    Generate a validated semantic profile for an uploaded dataset.
+
+    This is a POST endpoint because it triggers an AI operation.
+    """
+
+    df = load_dataset(file_id)
+
+    try:
+        return create_semantic_profile(df)
+    except SemanticProfileError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
 
 
 @router.get("/dataset/{file_id}/column/{column_name}")
@@ -136,23 +175,47 @@ def ask_dataset(
 
     # 3. The request is clear, so execute the validated plan.
     try:
-        chart = execute_analysis_plan(
-            df=df,
-            plan=decision.plan,
-        )
-        draft_answer = generate_chart_insight(chart)
-        warnings = generate_analysis_warnings(
-            df=df,
-            plan=decision.plan,
-            chart=chart,
-        )
-        answer = polish_chart_insight(
-            question=request.question,
-            chart=chart,
-            draft=draft_answer,
-            assumptions=decision.plan.assumptions,
-            warnings=warnings,
-        )
+        if decision.plan.output_type == "chart":
+            chart = execute_analysis_plan(
+                df=df,
+                plan=decision.plan,
+            )
+
+            draft_answer = generate_chart_insight(chart)
+
+            warnings = generate_analysis_warnings(
+                df=df,
+                plan=decision.plan,
+                chart=chart,
+            )
+
+            answer = polish_chart_insight(
+                question=request.question,
+                chart=chart,
+                draft=draft_answer,
+                assumptions=decision.plan.assumptions,
+                warnings=warnings,
+            )
+
+            charts = [chart]
+            kpis = []
+
+        else:
+            kpi = execute_kpi_plan(
+                df=df,
+                plan=decision.plan,
+            )
+
+            answer = (
+                f"{kpi.title}: "
+                f"{kpi.value:,.2f}"
+                if isinstance(kpi.value, float)
+                else f"{kpi.title}: {kpi.value:,}"
+            )
+
+            warnings = []
+            charts = []
+            kpis = [kpi]
 
     except AnalysisExecutionError as error:
         raise HTTPException(
@@ -160,11 +223,107 @@ def ask_dataset(
             detail=str(error),
         ) from error
 
-    # 4. Return the calculated chart specification to Next.js.
+    # 4. Return the calculated chart or KPI specification to Next.js.
     return CompletedAnalysisResponse(
         conversation_id=conversation_id,
         answer=answer,
-        charts=[chart],
+        charts=charts,
+        kpis=kpis,
         assumptions=decision.plan.assumptions,
         warnings=warnings,
     )
+
+
+@router.post(
+    "/dataset/{file_id}/analysis-suggestions",
+    response_model=AnalysisSuggestions,
+)
+def get_analysis_suggestions(
+    file_id: str,
+) -> AnalysisSuggestions:
+    """
+    Generate validated KPI and chart suggestions for an uploaded dataset.
+
+    This endpoint returns calculation plans, not calculated results.
+    """
+
+    df = load_dataset(file_id)
+
+    try:
+        return generate_analysis_suggestions(df)
+    except (
+        SemanticProfileError,
+        SuggestionGenerationError,
+    ) as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error
+
+
+
+
+@router.post(
+    "/dataset/{file_id}/suggestion-preview",
+    response_model=SuggestionPreviewResponse,
+)
+def preview_analysis_suggestion(
+    file_id: str,
+    request: SuggestionPreviewRequest,
+) -> SuggestionPreviewResponse:
+    """
+    Safely execute one selected KPI or chart suggestion.
+
+    The AI-generated plan is still validated and executed only through
+    trusted pandas operations.
+    """
+
+    df = load_dataset(file_id)
+
+    try:
+        if request.output_type == "chart":
+            if request.chart_plan is None:
+                raise AnalysisExecutionError(
+                    "A chart preview requires a chart plan."
+                )
+
+            chart = execute_analysis_plan(
+                df=df,
+                plan=request.chart_plan,
+            )
+
+            warnings = generate_analysis_warnings(
+                df=df,
+                plan=request.chart_plan,
+                chart=chart,
+            )
+
+            return SuggestionPreviewResponse(
+                output_type="chart",
+                chart=chart,
+                kpi=None,
+                warnings=warnings,
+            )
+
+        if request.kpi_plan is None:
+            raise AnalysisExecutionError(
+                "A KPI preview requires a KPI plan."
+            )
+
+        kpi = execute_kpi_plan(
+            df=df,
+            plan=request.kpi_plan,
+        )
+
+        return SuggestionPreviewResponse(
+            output_type="kpi",
+            chart=None,
+            kpi=kpi,
+            warnings=[],
+        )
+
+    except AnalysisExecutionError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(error),
+        ) from error

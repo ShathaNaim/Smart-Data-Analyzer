@@ -6,12 +6,17 @@ import { useEffect, useState } from "react";
 import ChartRenderer, {
   type ChartSpec,
 } from "../../components/ChartRenderer";
+import KpiCard, {
+  type KpiSpec,
+} from "../../components/KpiCard";
 
 
 type DashboardItem = {
   id: string;
   title: string;
-  chart_spec: ChartSpec;
+  item_type: "chart" | "kpi";
+  chart_spec: ChartSpec | null;
+  kpi_spec: KpiSpec | null;
   color_config: Record<string, string>;
   position_x: number;
   position_y: number;
@@ -42,6 +47,21 @@ const FALLBACK_CHART_COLORS = [
   "#8b5cf6",
   "#ef4444",
 ];
+
+const KPI_WIDTH_CLASSES: Record<number, string> = {
+  3: "col-span-12 sm:col-span-6 lg:col-span-3",
+  6: "col-span-12 sm:col-span-6 lg:col-span-6",
+};
+
+const CHART_WIDTH_CLASSES: Record<number, string> = {
+  6: "col-span-12 lg:col-span-6",
+  12: "col-span-12",
+};
+
+const sizeButtonClass = (selected: boolean) =>
+  selected
+    ? "rounded-md bg-amber-400 px-3 py-1.5 text-xs font-bold text-stone-900 shadow-sm"
+    : "rounded-md px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-white";
 
 
 export default function DashboardEditor({
@@ -116,7 +136,7 @@ export default function DashboardEditor({
       return {
         ...previousDashboard,
         items: previousDashboard.items.map((item) =>
-          item.id === itemId
+          item.id === itemId && item.chart_spec
             ? {
                 ...item,
                 chart_spec: {
@@ -138,7 +158,7 @@ export default function DashboardEditor({
       return {
         ...previousDashboard,
         items: previousDashboard.items.map((item) =>
-          item.id === itemId
+          item.id === itemId && item.chart_spec
             ? {
                 ...item,
                 color_config: {
@@ -173,7 +193,9 @@ export default function DashboardEditor({
             items: dashboard.items.map((item) => ({
               id: item.id,
               title: item.title,
+              item_type: item.item_type,
               chart_spec: item.chart_spec,
+              kpi_spec: item.kpi_spec,
               color_config: item.color_config,
               position_x: item.position_x,
               position_y: item.position_y,
@@ -202,6 +224,133 @@ export default function DashboardEditor({
     }
   };
 
+  const changeItemWidth = (
+    itemId: string,
+    width: number,
+  ) => {
+    setDashboard((previousDashboard) => {
+      if (!previousDashboard) return previousDashboard;
+
+      return {
+        ...previousDashboard,
+        items: previousDashboard.items.map((item) =>
+          item.id === itemId
+            ? { ...item, width }
+            : item,
+        ),
+      };
+    });
+
+    setSavedMessage(null);
+  };
+
+    const moveItem = (
+      itemId: string,
+      direction: -1 | 1,
+    ) => {
+      setDashboard((previousDashboard) => {
+        if (!previousDashboard) {
+          return previousDashboard;
+        }
+
+        const currentItem = previousDashboard.items.find(
+          (item) => item.id === itemId,
+        );
+
+        if (!currentItem) {
+          return previousDashboard;
+        }
+
+        const sameTypeItems = previousDashboard.items
+          .filter(
+            (item) =>
+              item.item_type === currentItem.item_type,
+          )
+          .sort(
+            (firstItem, secondItem) =>
+              firstItem.position_y - secondItem.position_y,
+          );
+
+        const currentIndex = sameTypeItems.findIndex(
+          (item) => item.id === itemId,
+        );
+
+        const targetIndex = currentIndex + direction;
+
+        if (
+          currentIndex === -1 ||
+          targetIndex < 0 ||
+          targetIndex >= sameTypeItems.length
+        ) {
+          return previousDashboard;
+        }
+
+        const targetItem = sameTypeItems[targetIndex];
+
+        return {
+          ...previousDashboard,
+          items: previousDashboard.items.map((item) => {
+            if (item.id === currentItem.id) {
+              return {
+                ...item,
+                position_y: targetItem.position_y,
+              };
+            }
+
+            if (item.id === targetItem.id) {
+              return {
+                ...item,
+                position_y: currentItem.position_y,
+              };
+            }
+
+            return item;
+          }),
+        };
+      });
+
+      setSavedMessage(null);
+    };
+
+    function LeftArrowIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      className="h-4 w-4"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19 12H5m6-6-6 6 6 6"
+      />
+    </svg>
+  );
+}
+
+
+function RightArrowIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      className="h-4 w-4"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M5 12h14m-6-6 6 6-6 6"
+      />
+    </svg>
+  );
+}
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-amber-50 text-stone-700">
@@ -225,6 +374,27 @@ export default function DashboardEditor({
     );
   }
 
+      const kpiItems = dashboard.items
+        .filter(
+          (item) =>
+            item.item_type === "kpi" &&
+            item.kpi_spec,
+        )
+        .sort(
+          (firstItem, secondItem) =>
+            firstItem.position_y - secondItem.position_y,
+        );
+
+      const chartItems = dashboard.items
+        .filter(
+          (item) =>
+            item.item_type === "chart" &&
+            item.chart_spec,
+        )
+        .sort(
+          (firstItem, secondItem) =>
+            firstItem.position_y - secondItem.position_y,
+        );
   return (
     <main className="min-h-screen bg-amber-50 px-5 py-8 text-stone-900 sm:px-8">
       <section className="mx-auto max-w-6xl">
@@ -276,14 +446,95 @@ export default function DashboardEditor({
           <div className="mt-6 rounded-2xl border-2 border-dashed border-amber-300 bg-white/70 p-12 text-center">
             <p className="font-bold text-stone-800">This dashboard is empty.</p>
             <Link href="/" className="mt-2 inline-block text-sm font-semibold text-amber-700">
-              Generate and add a chart
+              Generate and add a chart or KPI
             </Link>
           </div>
         ) : (
-          <div className="mt-6 grid gap-5 lg:grid-cols-2">
-            {dashboard.items.map((item) => (
-              <article key={item.id} className="rounded-2xl border border-amber-200 bg-white p-4 shadow-sm">
+          <div className="mt-6 space-y-6">
+            {kpiItems.length > 0 && (
+              <section aria-label="Dashboard KPIs">
+                <div className="grid grid-cols-12 gap-4">
+                  {kpiItems.map((item, index) => (
+                    
+                    <div
+                      key={item.id}
+                      className={KPI_WIDTH_CLASSES[item.width] ?? KPI_WIDTH_CLASSES[3]}
+                    >
+
+
+                       <div
+                              className="flex rounded-lg border border-amber-200 bg-white p-1"
+                              aria-label={`Reorder ${item.title}`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => moveItem(item.id, -1)}
+                                disabled={index === 0}
+                                aria-label={`Move ${item.title} left`}
+                                title="Move left"
+                                className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-amber-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+                              >
+                                <LeftArrowIcon />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => moveItem(item.id, 1)}
+                                disabled={index === kpiItems.length - 1}
+                                aria-label={`Move ${item.title} right`}
+                                title="Move right"
+                                className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-amber-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+                              >
+                                <RightArrowIcon />
+                              </button>
+                            </div>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="flex rounded-lg bg-amber-100/70 p-1" aria-label="KPI size">
+                          <button
+                            type="button"
+                            onClick={() => changeItemWidth(item.id, 3)}
+                            aria-pressed={item.width === 3}
+                            className={sizeButtonClass(item.width === 3)}
+                          >
+                            Small
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => changeItemWidth(item.id, 6)}
+                            aria-pressed={item.width === 6}
+                            className={sizeButtonClass(item.width === 6)}
+                          >
+                            Wide
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.id)}
+                          className="rounded-lg px-2 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      {item.kpi_spec && <KpiCard kpi={item.kpi_spec} />}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {chartItems.length > 0 && (
+              <section
+                aria-label="Dashboard charts"
+                className="grid grid-cols-12 gap-5"
+              >
+            {chartItems.map((item, index) => (
+              <article
+                key={item.id}
+                className={`${CHART_WIDTH_CLASSES[item.width] ?? CHART_WIDTH_CLASSES[6]} rounded-2xl border border-amber-200 bg-white p-4 shadow-sm`}
+              >
+
                 <div className="flex flex-wrap items-end justify-between gap-3">
+                  {item.chart_spec && (
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="text-xs font-bold uppercase tracking-wide text-stone-600">
                       Chart type
@@ -318,23 +569,73 @@ export default function DashboardEditor({
                       />
                     </label>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    className="rounded-lg px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-                  >
-                    Remove
-                  </button>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="flex rounded-lg border border-amber-200 bg-white p-1"
+                      aria-label={`Reorder ${item.title}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => moveItem(item.id, -1)}
+                        disabled={index === 0}
+                        aria-label={`Move ${item.title} earlier`}
+                        title="Move left"
+                        className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-amber-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        <LeftArrowIcon />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveItem(item.id, 1)}
+                        disabled={index === chartItems.length - 1}
+                        aria-label={`Move ${item.title} later`}
+                        title="Move right"
+                        className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-amber-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        <RightArrowIcon />
+                      </button>
+                    </div>
+                    <div className="flex rounded-lg bg-amber-100/70 p-1" aria-label="Chart size">
+                      <button
+                        type="button"
+                        onClick={() => changeItemWidth(item.id, 6)}
+                        aria-pressed={item.width === 6}
+                        className={sizeButtonClass(item.width === 6)}
+                      >
+                        Half
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => changeItemWidth(item.id, 12)}
+                        aria-pressed={item.width === 12}
+                        className={sizeButtonClass(item.width === 12)}
+                      >
+                        Full
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(item.id)}
+                      className="rounded-lg px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
-                <ChartRenderer
-                  chart={item.chart_spec}
-                  colors={[
-                    item.color_config.primary || "#f59e0b",
-                    ...FALLBACK_CHART_COLORS,
-                  ]}
-                />
+                {item.chart_spec && (
+                  <ChartRenderer
+                    chart={item.chart_spec}
+                    colors={[
+                      item.color_config.primary || "#f59e0b",
+                      ...FALLBACK_CHART_COLORS,
+                    ]}
+                  />
+                )}
               </article>
             ))}
+              </section>
+            )}
           </div>
         )}
       </section>

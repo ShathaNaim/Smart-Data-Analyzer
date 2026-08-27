@@ -33,9 +33,20 @@ class DashboardItem(Base):
         nullable=False,
     )
 
-    chart_spec: Mapped[dict[str, Any]] = mapped_column(
-        JSONB,
+    item_type: Mapped[str] = mapped_column(
+        String(20),
         nullable=False,
+        default="chart",
+    )
+
+    chart_spec: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True),
+        nullable=True,
+    )
+
+    kpi_spec: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True),
+        nullable=True,
     )
 
     color_config: Mapped[dict[str, Any]] = mapped_column(
