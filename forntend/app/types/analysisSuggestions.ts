@@ -123,3 +123,7 @@ export type SuggestionPreviewResponse =
       kpi: null;
       warnings: string[];
     };
+
+
+
+

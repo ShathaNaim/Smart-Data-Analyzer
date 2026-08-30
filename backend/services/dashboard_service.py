@@ -1,12 +1,12 @@
 import uuid
-
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.models.dashboard import Dashboard
 from backend.models.dashboard_item import DashboardItem
 from backend.models.dataset import Dataset
-from backend.schemas.dashboard import DashboardCreate, DashboardSave
+from backend.schemas.dashboard import DashboardCreate, DashboardSave, DashboardSummaryResponse
 
 
 class DatasetNotFoundError(Exception):
@@ -21,7 +21,9 @@ class DashboardItemNotFoundError(Exception):
     """Raised when an item ID does not belong to the dashboard being saved."""
 
 
-def create_dashboard(db: Session, data: DashboardCreate) -> Dashboard:
+def create_dashboard(
+    db: Session, data: DashboardCreate, owner_id: uuid.UUID
+) -> Dashboard:
     """Create and commit an empty dashboard for an existing dataset."""
     dataset = db.get(Dataset, data.dataset_id)
 
@@ -33,6 +35,7 @@ def create_dashboard(db: Session, data: DashboardCreate) -> Dashboard:
     dashboard = Dashboard(
         dataset_id=data.dataset_id,
         name=data.name,
+        owner_id=owner_id,
     )
 
     try:
@@ -46,12 +49,17 @@ def create_dashboard(db: Session, data: DashboardCreate) -> Dashboard:
     return dashboard
 
 
-def get_dashboard(db: Session, dashboard_id: uuid.UUID) -> Dashboard:
+def get_dashboard(
+    db: Session, dashboard_id: uuid.UUID, owner_id: uuid.UUID
+) -> Dashboard:
     """Load a dashboard and its items in one service operation."""
     statement = (
         select(Dashboard)
         .options(selectinload(Dashboard.items))
-        .where(Dashboard.id == dashboard_id)
+        .where(
+            Dashboard.id == dashboard_id,
+            Dashboard.owner_id == owner_id,
+        )
     )
     dashboard = db.scalar(statement)
 
@@ -67,9 +75,10 @@ def save_dashboard(
     db: Session,
     dashboard_id: uuid.UUID,
     data: DashboardSave,
+    owner_id: uuid.UUID,
 ) -> Dashboard:
     """Update dashboard details and synchronize its complete item layout."""
-    dashboard = get_dashboard(db, dashboard_id)
+    dashboard = get_dashboard(db, dashboard_id, owner_id)
     existing_items = {item.id: item for item in dashboard.items}
     saved_items: list[DashboardItem] = []
     submitted_ids: set[uuid.UUID] = set()
@@ -112,10 +121,41 @@ def save_dashboard(
 
     dashboard.name = data.name
     dashboard.items = saved_items
+    dashboard.updated_at = datetime.now(timezone.utc)
 
     try:
         db.commit()
-        return get_dashboard(db, dashboard.id)
+        return get_dashboard(db, dashboard.id, owner_id)
     except Exception:
         db.rollback()
         raise
+
+
+def list_dashboards(
+    db: Session,
+    owner_id: uuid.UUID,
+    limit: int = 5,
+) -> list[DashboardSummaryResponse]:
+    """Return a list of dashboards with summary information."""
+    statement = (
+        select(Dashboard)
+        .options(selectinload(Dashboard.items))
+        .where(Dashboard.owner_id == owner_id)
+        .order_by(Dashboard.updated_at.desc())
+        .limit(limit)
+    )
+    dashboards = db.scalars(statement).all()
+
+    return [
+        DashboardSummaryResponse(
+            id=dashboard.id,
+            dataset_id=dashboard.dataset_id,
+            name=dashboard.name,
+            item_count=len(dashboard.items),
+            kpi_count=sum(1 for item in dashboard.items if item.item_type == "kpi"),
+            chart_count=sum(1 for item in dashboard.items if item.item_type == "chart"),
+            created_at=dashboard.created_at,
+            updated_at=dashboard.updated_at,
+        )
+        for dashboard in dashboards
+    ]

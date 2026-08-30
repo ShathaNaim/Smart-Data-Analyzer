@@ -64,6 +64,9 @@ export default function ChartRenderer({
   chart,
   colors = CHART_COLORS,
 }: ChartRendererProps) {
+  const hasDenseXAxis = chart.data.length > 6;
+  const cartesianChartWidth = Math.max(560, chart.data.length * 72);
+
   // This variable will contain the selected Recharts chart.
   let renderedChart: React.ReactNode;
 
@@ -75,7 +78,7 @@ export default function ChartRenderer({
           margin={{
             top: 10,
             right: 10,
-            bottom: 30,
+            bottom: hasDenseXAxis ? 72 : 48,
             left: 10,
           }}
         >
@@ -86,16 +89,21 @@ export default function ChartRenderer({
 
           <XAxis
             dataKey={chart.x_axis.key}
+            interval={0}
+            angle={hasDenseXAxis ? -30 : 0}
+            textAnchor={hasDenseXAxis ? "end" : "middle"}
+            height={hasDenseXAxis ? 80 : 50}
+            tickMargin={10}
             label={{
               value: chart.x_axis.label,
               position: "insideBottom",
-              offset: -15,
+              offset: hasDenseXAxis ? -62 : -32,
             }}
           />
 
           <YAxis />
           <Tooltip />
-          <Legend />
+          <Legend verticalAlign="top" height={36} />
 
           {chart.series.map((series, index) => (
             <Bar
@@ -121,7 +129,7 @@ export default function ChartRenderer({
           margin={{
             top: 10,
             right: 10,
-            bottom: 30,
+            bottom: hasDenseXAxis ? 72 : 48,
             left: 10,
           }}
         >
@@ -132,16 +140,21 @@ export default function ChartRenderer({
 
           <XAxis
             dataKey={chart.x_axis.key}
+            interval={0}
+            angle={hasDenseXAxis ? -30 : 0}
+            textAnchor={hasDenseXAxis ? "end" : "middle"}
+            height={hasDenseXAxis ? 80 : 50}
+            tickMargin={10}
             label={{
               value: chart.x_axis.label,
               position: "insideBottom",
-              offset: -15,
+              offset: hasDenseXAxis ? -62 : -32,
             }}
           />
 
           <YAxis />
           <Tooltip />
-          <Legend />
+          <Legend verticalAlign="top" height={36} />
 
           {chart.series.map((series, index) => (
             <Line
@@ -169,7 +182,7 @@ export default function ChartRenderer({
           margin={{
             top: 10,
             right: 10,
-            bottom: 30,
+            bottom: hasDenseXAxis ? 72 : 48,
             left: 10,
           }}
         >
@@ -180,16 +193,21 @@ export default function ChartRenderer({
 
           <XAxis
             dataKey={chart.x_axis.key}
+            interval={0}
+            angle={hasDenseXAxis ? -30 : 0}
+            textAnchor={hasDenseXAxis ? "end" : "middle"}
+            height={hasDenseXAxis ? 80 : 50}
+            tickMargin={10}
             label={{
               value: chart.x_axis.label,
               position: "insideBottom",
-              offset: -15,
+              offset: hasDenseXAxis ? -62 : -32,
             }}
           />
 
           <YAxis />
           <Tooltip />
-          <Legend />
+          <Legend verticalAlign="top" height={36} />
 
           {chart.series.map((series, index) => (
             <Area
@@ -271,13 +289,23 @@ export default function ChartRenderer({
         </p>
       )}
 
-      <div className="mt-5 h-80 w-full">
-        <ResponsiveContainer
-          width="100%"
-          height="100%"
+      <div className="mt-5 h-96 w-full overflow-x-auto">
+        <div
+          className="h-full min-w-full"
+          style={{
+            width:
+              chart.type === "pie"
+                ? "100%"
+                : `${cartesianChartWidth}px`,
+          }}
         >
-          {renderedChart}
-        </ResponsiveContainer>
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+          >
+            {renderedChart}
+          </ResponsiveContainer>
+        </div>
       </div>
     </section>
   );

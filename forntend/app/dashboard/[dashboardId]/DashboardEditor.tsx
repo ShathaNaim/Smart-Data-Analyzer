@@ -72,6 +72,10 @@ export default function DashboardEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -82,8 +86,8 @@ export default function DashboardEditor({
 
       try {
         const response = await fetch(
-          `http://127.0.0.1:8000/dashboards/${dashboardId}`,
-          { signal: controller.signal },
+          `http://localhost:8000/dashboards/${dashboardId}`,
+          { signal: controller.signal, credentials: "include" },
         );
         const data = await response.json();
 
@@ -182,9 +186,10 @@ export default function DashboardEditor({
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/dashboards/${dashboard.id}`,
+        `http://localhost:8000/dashboards/${dashboard.id}`,
         {
           method: "PUT",
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
           },
@@ -221,6 +226,62 @@ export default function DashboardEditor({
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const copyShareLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      setShareError(null);
+    } catch {
+      setShareCopied(false);
+      setShareError(
+        "The link was created, but automatic copying was blocked. Copy it from the field below.",
+      );
+    }
+  };
+
+  const createShareLink = async () => {
+    if (!dashboard || sharing) return;
+
+    setSharing(true);
+    setShareError(null);
+    setShareCopied(false);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/dashboards/${dashboard.id}/share`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            expires_in_days: null,
+          }),
+        },
+      );
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail || "Could not create the share link.",
+        );
+      }
+
+      const url = `${window.location.origin}/share/${data.token}`;
+      setShareUrl(url);
+      await copyShareLink(url);
+    } catch (error) {
+      setShareError(
+        error instanceof Error
+          ? error.message
+          : "Could not create the share link.",
+      );
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -422,6 +483,14 @@ function RightArrowIcon() {
             </Link>
             <button
               type="button"
+              onClick={() => void createShareLink()}
+              disabled={sharing}
+              className="rounded-xl border border-violet-300 px-4 py-3 font-bold text-violet-800 transition hover:bg-violet-50 disabled:cursor-wait disabled:border-stone-200 disabled:text-stone-400"
+            >
+              {sharing ? "Creating link..." : "Share"}
+            </button>
+            <button
+              type="button"
               onClick={() => void saveDashboard()}
               disabled={saving || !dashboard.name.trim()}
               className="rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-not-allowed disabled:bg-stone-300"
@@ -430,6 +499,39 @@ function RightArrowIcon() {
             </button>
           </div>
         </header>
+
+        {(shareUrl || shareError) && (
+          <section className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="min-w-0 flex-1 text-xs font-bold uppercase tracking-wide text-violet-800">
+                Read-only share link
+                <input
+                  readOnly
+                  value={shareUrl || ""}
+                  onFocus={(event) => event.currentTarget.select()}
+                  className="mt-1 block w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-stone-700 outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-100"
+                />
+              </label>
+              {shareUrl && (
+                <button
+                  type="button"
+                  onClick={() => void copyShareLink(shareUrl)}
+                  className="rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-violet-800"
+                >
+                  {shareCopied ? "Copied" : "Copy link"}
+                </button>
+              )}
+            </div>
+            <p className="mt-2 text-xs leading-5 text-violet-700">
+              Anyone with this link can view the last saved dashboard, but cannot edit it.
+            </p>
+            {shareError && (
+              <p role="alert" className="mt-2 text-sm font-medium text-red-700">
+                {shareError}
+              </p>
+            )}
+          </section>
+        )}
 
         {error && (
           <p role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700">

@@ -142,3 +142,15 @@ class DashboardResponse(DashboardSchema):
     items: list[DashboardItemResponse]
     created_at: datetime
     updated_at: datetime
+
+
+
+class DashboardSummaryResponse(DashboardSchema):
+    id: uuid.UUID
+    dataset_id: uuid.UUID
+    name: str
+    item_count: int
+    kpi_count: int
+    chart_count: int
+    created_at: datetime
+    updated_at: datetime

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ChartRenderer, {
   type ChartSpec,
@@ -8,6 +8,7 @@ import ChartRenderer, {
 import KpiCard, {
   type KpiSpec,
 } from "./components/KpiCard";
+import AppSidebar from "./components/AppSidebar";
 
 import type {
   AnalysisSuggestions,
@@ -103,6 +104,8 @@ type SavedDashboard = {
 
 export default function Home() {
   const router = useRouter();
+  const analysisResultsRef = useRef<HTMLDivElement>(null);
+  const summarySectionRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<UploadeResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -136,6 +139,14 @@ export default function Home() {
 
   const [suggestionsError, setSuggestionsError] =useState<string | null>(null);
 
+  const scrollToSection = (getElement: () => HTMLElement | null) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        getElement()?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  };
+
   const handleAddToDashboard = async (
     dashboardItem:
       | { type: "chart"; spec: ChartSpec }
@@ -157,7 +168,8 @@ export default function Home() {
 
       if (storedDashboardId) {
         const response = await fetch(
-          `http://127.0.0.1:8000/dashboards/${storedDashboardId}`,
+          `http://localhost:8000/dashboards/${storedDashboardId}`,
+          { credentials: "include" },
         );
         const data = await response.json();
 
@@ -172,9 +184,10 @@ export default function Home() {
 
       if (!currentDashboard) {
         const response = await fetch(
-          "http://127.0.0.1:8000/dashboards",
+          "http://localhost:8000/dashboards",
           {
             method: "POST",
+            credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               dataset_id: result.file_id,
@@ -240,9 +253,10 @@ export default function Home() {
           ];
 
       const response = await fetch(
-        `http://127.0.0.1:8000/dashboards/${dashboard.id}`,
+        `http://localhost:8000/dashboards/${dashboard.id}`,
         {
           method: "PUT",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: dashboard.name,
@@ -417,6 +431,7 @@ export default function Home() {
         throw new Error(data.detail || "Could not analyze the dataset.");
       }
       setSummary(data);
+      scrollToSection(() => summarySectionRef.current);
     } catch (error) {
       console.error("Error analyzing file:", error);
       setError(
@@ -558,6 +573,7 @@ const handleColumnClick = async (column: string) => {
       setAssumptions(askResponse.assumptions);
       setWarnings(askResponse.warnings);
       setQuestion("");
+      scrollToSection(() => analysisResultsRef.current);
     } catch (error) {
       console.error(
         "Error asking the data agent:",
@@ -654,6 +670,7 @@ const handleColumnClick = async (column: string) => {
 
     setAssumptions(suggestion.plan.assumptions);
     setWarnings(preview.warnings);
+    scrollToSection(() => analysisResultsRef.current);
   } catch (error) {
     setSuggestionPreviewError(
       error instanceof Error
@@ -667,12 +684,11 @@ const handleColumnClick = async (column: string) => {
           
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-amber-50 px-5 py-10 text-stone-900 sm:px-8 sm:py-16">
-      <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-yellow-300/35 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-32 -right-20 h-96 w-96 rounded-full bg-amber-300/30 blur-3xl" />
-
-      <section className="relative mx-auto w-full max-w-3xl">
-        <header className="mb-8 text-center">
+    <div className="min-h-screen bg-amber-50 lg:flex">
+      <AppSidebar />
+      <main className="relative min-h-screen min-w-0 flex-1 overflow-hidden bg-amber-50 px-5 py-10 text-stone-900 sm:px-8 sm:py-16">
+      <section className="relative mx-auto flex w-full max-w-3xl flex-col">
+        {!result && <header className="mb-8 text-center">
           <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-yellow-100 px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm">
             <span className="h-2 w-2 rounded-full bg-amber-500" />
             Smart Data Analyzer
@@ -685,11 +701,13 @@ const handleColumnClick = async (column: string) => {
             Upload your dataset and get a quick, simple overview of its rows,
             columns, and contents.
           </p>
-        </header>
+        </header>}
 
-        <div className="rounded-3xl border border-amber-200 bg-white/90 p-5 shadow-[0_24px_70px_-28px_rgba(180,83,9,0.35)] backdrop-blur sm:p-8">
+        <div className={result ? "contents" : "rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-8"}>
+          {!result && (
+            <>
           <label className="group flex cursor-pointer flex-col items-center rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/70 px-6 py-10 text-center transition hover:border-amber-500 hover:bg-yellow-50">
-            <span className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-amber-400 text-stone-900 shadow-lg shadow-amber-200 transition group-hover:-translate-y-1">
+            <span className="mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-amber-400 text-stone-900 shadow-sm transition group-hover:-translate-y-1">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
@@ -730,18 +748,12 @@ const handleColumnClick = async (column: string) => {
           <button
             onClick={handleUpload}
             disabled={!file || loading}
-            className="mt-5 w-full rounded-xl bg-amber-400 px-5 py-3.5 font-bold text-stone-950 shadow-lg shadow-amber-200 transition hover:bg-amber-500 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400 disabled:shadow-none"
+            className="mt-5 w-full rounded-xl bg-amber-400 px-5 py-3.5 font-bold text-stone-950 shadow-sm transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-600 disabled:shadow-none"
           >
             {loading ? "Analyzing your file..." : "Upload"}
           </button>
-
-           <button
-            onClick={handleSummary}
-            disabled={!result || loading || summaryLoading}
-            className="mt-5 w-full rounded-xl bg-amber-400 px-5 py-3.5 font-bold text-stone-950 shadow-lg shadow-amber-200 transition hover:bg-amber-500 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400 disabled:shadow-none"
-          >
-            {summaryLoading ? "Analyzing your file..." : "Analyze"}
-          </button>
+            </>
+          )}
 
           {error && (
             <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -750,19 +762,37 @@ const handleColumnClick = async (column: string) => {
           )}
 
           {result && (
-            <div className="mt-8 border-t border-amber-100 pt-7">
-              <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="contents">
+              <div className="order-1 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-amber-600">
-                    Analysis complete
+                    Current dataset
                   </p>
                   <h2 className="mt-1 break-all text-xl font-bold text-stone-900">
                     {result.filename}
                   </h2>
                 </div>
-                <span className="rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-amber-800">
-                  CSV
-                </span>
+                <label className="cursor-pointer rounded-lg border border-amber-300 bg-white px-4 py-2 text-center text-sm font-bold text-amber-800 transition hover:bg-amber-50">
+                  Choose a different file
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(event) => {
+                      setFile(event.target.files ? event.target.files[0] : null);
+                      setResult(null);
+                      setSummary(null);
+                      setError(null);
+                      setAnswer("");
+                      setAskError(null);
+                      setCharts([]);
+                      setKpis([]);
+                      setAssumptions([]);
+                      setWarnings([]);
+                    }}
+                    className="sr-only"
+                  />
+                </label>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -780,6 +810,20 @@ const handleColumnClick = async (column: string) => {
                 </div>
               </div>
 
+              <button
+                onClick={handleSummary}
+                disabled={loading || summaryLoading}
+                className="mt-4 w-full rounded-xl bg-amber-400 px-5 py-3 font-bold text-stone-950 shadow-sm transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-600 disabled:shadow-none"
+              >
+                {summaryLoading ? "Analyzing your file..." : "Analyze"}
+              </button>
+              </div>
+
+              {summary && (
+                <div
+                  ref={summarySectionRef}
+                  className="order-4 mt-8 scroll-mt-6 rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-8"
+                >
               {result.preview.length > 0 && (
                 <div className="mt-5 overflow-hidden rounded-xl border border-amber-200">
                   <div className="border-b border-amber-200 bg-yellow-50 px-4 py-3">
@@ -950,13 +994,16 @@ const handleColumnClick = async (column: string) => {
                   )}
                 </div>
               )}
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="mt-8 rounded-3xl border border-amber-200 bg-white/90 p-5 shadow-[0_24px_70px_-28px_rgba(180,83,9,0.3)] backdrop-blur sm:p-8">
+        {result && <div className="contents">
+          <div className="order-5 mt-8 rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-8">
           <div className="flex items-start gap-4">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-400 text-xl shadow-md shadow-amber-200">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-400 text-xl shadow-sm">
               ✦
             </span>
             <div>
@@ -967,13 +1014,13 @@ const handleColumnClick = async (column: string) => {
             </div>
           </div>
 
-          <div className="mt-6 rounded-2xl border border-violet-200 bg-violet-50/60 p-5">
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/70 p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h3 className="font-bold text-violet-950">
+                <h3 className="font-bold text-amber-950">
                   AI analysis suggestions
                 </h3>
-                <p className="mt-1 text-sm leading-6 text-violet-700">
+                <p className="mt-1 text-sm leading-6 text-amber-800">
                   Let the agent study the meaning of your columns and recommend
                   useful KPI cards and charts.
                 </p>
@@ -983,7 +1030,7 @@ const handleColumnClick = async (column: string) => {
                 type="button"
                 onClick={() => void handleGenerateSuggestions()}
                 disabled={!result || suggestionsLoading}
-                className="shrink-0 rounded-xl bg-violet-700 px-5 py-3 font-bold text-white transition hover:bg-violet-800 disabled:cursor-not-allowed disabled:bg-stone-300"
+                className="shrink-0 rounded-xl bg-amber-400 px-5 py-3 font-bold text-stone-950 transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-600"
               >
                 {suggestionsLoading
                   ? "Studying dataset..."
@@ -995,13 +1042,13 @@ const handleColumnClick = async (column: string) => {
 
             {suggestionsLoading && (
               <div
-                className="mt-4 rounded-xl border border-violet-200 bg-white px-4 py-3"
+                className="mt-4 rounded-xl border border-amber-200 bg-white px-4 py-3"
                 aria-live="polite"
               >
-                <p className="font-semibold text-violet-900">
+                <p className="font-semibold text-amber-900">
                   The AI is studying your dataset...
                 </p>
-                <p className="mt-1 text-sm text-violet-600">
+                <p className="mt-1 text-sm text-amber-700">
                   It is identifying column meanings and useful analytical roles.
                 </p>
               </div>
@@ -1018,7 +1065,7 @@ const handleColumnClick = async (column: string) => {
 
             {suggestions && !suggestionsLoading && (
               <div className="mt-5 space-y-5">
-                <p className="text-sm leading-6 text-violet-900">
+                <p className="text-sm leading-6 text-amber-900">
                   {suggestions.summary}
                 </p>
 
@@ -1033,20 +1080,20 @@ const handleColumnClick = async (column: string) => {
 
                 {suggestions.kpi_suggestions.length > 0 && (
                   <section>
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-violet-800">
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-amber-800">
                       Suggested KPIs
                     </h4>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       {suggestions.kpi_suggestions.map((suggestion) => (
                         <article
                           key={suggestion.id}
-                          className="rounded-xl border border-violet-200 bg-white p-4"
+                          className="rounded-xl border border-amber-200 bg-white p-4"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <h5 className="font-bold text-stone-900">
                               {suggestion.title}
                             </h5>
-                            <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700">
+                            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
                               {Math.round(suggestion.confidence * 100)}%
                             </span>
                           </div>
@@ -1062,7 +1109,7 @@ const handleColumnClick = async (column: string) => {
                               })
                             }
                             disabled={previewingSuggestionId !== null}
-                            className="mt-4 w-full rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-violet-800 disabled:cursor-wait disabled:bg-stone-300"
+                            className="mt-4 w-full rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-bold text-stone-950 transition hover:bg-amber-500 disabled:cursor-wait disabled:bg-stone-200 disabled:text-stone-600"
                           >
                             {previewingSuggestionId === suggestion.id
                               ? "Running analysis..."
@@ -1076,20 +1123,20 @@ const handleColumnClick = async (column: string) => {
 
                 {suggestions.chart_suggestions.length > 0 && (
                   <section>
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-violet-800">
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-amber-800">
                       Suggested charts
                     </h4>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       {suggestions.chart_suggestions.map((suggestion) => (
                         <article
                           key={suggestion.id}
-                          className="rounded-xl border border-violet-200 bg-white p-4"
+                          className="rounded-xl border border-amber-200 bg-white p-4"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <h5 className="font-bold text-stone-900">
                               {suggestion.title}
                             </h5>
-                            <span className="shrink-0 rounded-full bg-violet-100 px-2 py-1 text-xs font-semibold text-violet-700">
+                            <span className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
                               {Math.round(suggestion.confidence * 100)}%
                             </span>
                           </div>
@@ -1105,7 +1152,7 @@ const handleColumnClick = async (column: string) => {
                               })
                             }
                             disabled={previewingSuggestionId !== null}
-                            className="mt-4 w-full rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-violet-800 disabled:cursor-wait disabled:bg-stone-300"
+                            className="mt-4 w-full rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-bold text-stone-950 transition hover:bg-amber-500 disabled:cursor-wait disabled:bg-stone-200 disabled:text-stone-600"
                           >
                             {previewingSuggestionId === suggestion.id
                               ? "Running analysis..."
@@ -1165,7 +1212,7 @@ const handleColumnClick = async (column: string) => {
               <button
                 type="submit"
                 disabled={!result || !question.trim() || askLoading}
-                className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-stone-900 px-5 py-3.5 font-bold text-white shadow-lg transition hover:bg-amber-500 hover:text-stone-950 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400 disabled:shadow-none"
+                className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-stone-900 px-5 py-3.5 font-bold text-white shadow-sm transition hover:bg-amber-500 hover:text-stone-950 focus:outline-none focus:ring-4 focus:ring-amber-200 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-600 disabled:shadow-none"
               >
                 {askLoading && (
                   <span
@@ -1231,9 +1278,16 @@ const handleColumnClick = async (column: string) => {
               <p className="mt-1 text-sm text-red-700">{askError}</p>
             </div>
           )}
+          </div>
+
+          <div
+            ref={analysisResultsRef}
+            className="order-2 scroll-mt-6"
+            aria-hidden="true"
+          />
 
           {answer && !askLoading && (
-            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-5" aria-live="polite">
+            <div className="order-3 mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-5" aria-live="polite">
               <div className="flex items-center gap-2">
                 <span className="grid h-6 w-6 place-items-center rounded-full bg-amber-400 text-xs font-black text-stone-900">✓</span>
                 <h3 className="font-bold text-stone-900">Agent answer</h3>
@@ -1243,7 +1297,7 @@ const handleColumnClick = async (column: string) => {
           )}
 
           {assumptions.length > 0 && !askLoading && (
-            <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-5">
+            <div className="order-3 mt-5 rounded-2xl border border-sky-200 bg-sky-50 p-5">
               <h3 className="font-bold text-sky-900">Assumptions</h3>
               <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-sky-900">
                 {assumptions.map((assumption, index) => (
@@ -1255,7 +1309,7 @@ const handleColumnClick = async (column: string) => {
 
           {warnings.length > 0 && !askLoading && (
             <div
-              className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-5"
+              className="order-3 mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-5"
               role="status"
             >
               <h3 className="font-bold text-orange-900">Data warnings</h3>
@@ -1268,7 +1322,7 @@ const handleColumnClick = async (column: string) => {
           )}
 
           {kpis.length > 0 && !askLoading && (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="order-2 mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {kpis.map((kpi) => (
                 <div key={kpi.id}>
                   <KpiCard kpi={kpi} />
@@ -1278,7 +1332,7 @@ const handleColumnClick = async (column: string) => {
                       void handleAddToDashboard({ type: "kpi", spec: kpi })
                     }
                     disabled={addingItemId !== null}
-                    className="mt-3 w-full rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-wait disabled:bg-stone-300"
+                    className="mt-3 w-full rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-wait disabled:bg-stone-200 disabled:text-stone-600"
                   >
                     {addingItemId === kpi.id
                       ? "Adding to dashboard..."
@@ -1290,7 +1344,7 @@ const handleColumnClick = async (column: string) => {
           )}
 
           {charts.length > 0 && !askLoading && (
-            <div className="space-y-5">
+            <div className="order-3 mt-8 space-y-5">
               {charts.map((chart) => (
                 <div key={chart.id}>
                   <ChartRenderer chart={chart} />
@@ -1300,7 +1354,7 @@ const handleColumnClick = async (column: string) => {
                       void handleAddToDashboard({ type: "chart", spec: chart })
                     }
                     disabled={addingItemId !== null}
-                    className="mt-3 w-full rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-wait disabled:bg-stone-300"
+                    className="mt-3 w-full rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-wait disabled:bg-stone-200 disabled:text-stone-600"
                   >
                     {addingItemId === chart.id
                       ? "Adding to dashboard..."
@@ -1314,13 +1368,14 @@ const handleColumnClick = async (column: string) => {
           {dashboardError && !askLoading && (
             <p
               role="alert"
-              className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+              className="order-3 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
             >
               {dashboardError}
             </p>
           )}
-        </div>
+        </div>}
       </section>
-    </main>
+      </main>
+    </div>
   );
 }

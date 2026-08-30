@@ -3,6 +3,9 @@ from backend.app.api.upload import router as upload_router
 from backend.app.api.analysis import router as analysis_router
 from backend.app.api.dashboard import router as dashboard_router
 from fastapi.middleware.cors import CORSMiddleware
+from backend.app.api.dashboard_share import (
+    router as dashboard_share_router,
+)
 
 app = FastAPI()
 
@@ -18,6 +21,7 @@ app.add_middleware(
 app.include_router(upload_router)
 app.include_router(analysis_router)
 app.include_router(dashboard_router)
+app.include_router(dashboard_share_router)
 
 @app.get("/")
 def home():

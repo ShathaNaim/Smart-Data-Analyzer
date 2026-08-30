@@ -50,3 +50,9 @@ class Dashboard(Base):
         back_populates="dashboard",
         cascade="all, delete-orphan",
     )
+
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
