@@ -42,11 +42,28 @@ type DashboardEditorProps = {
 type EditableChartType = "bar" | "line" | "area" | "pie";
 
 const FALLBACK_CHART_COLORS = [
+  "#f59e0b",
   "#0ea5e9",
   "#10b981",
   "#8b5cf6",
   "#ef4444",
 ];
+
+const seriesColorKey = (seriesKey: string) => `series:${seriesKey}`;
+
+const getChartColors = (item: DashboardItem): string[] => {
+  const seriesColors = item.chart_spec?.series.map((series, index) =>
+    item.color_config[seriesColorKey(series.key)] ||
+    (index === 0 ? item.color_config.primary : undefined) ||
+    FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length],
+  ) ?? FALLBACK_CHART_COLORS;
+
+  // A pie has one numeric series but many category slices. Keep a full
+  // palette so each slice receives a different color.
+  return item.chart_spec?.type === "pie"
+    ? [seriesColors[0], ...FALLBACK_CHART_COLORS.slice(1)]
+    : seriesColors;
+};
 
 const KPI_WIDTH_CLASSES: Record<number, string> = {
   3: "col-span-12 sm:col-span-6 lg:col-span-3",
@@ -155,7 +172,11 @@ export default function DashboardEditor({
     setSavedMessage(null);
   };
 
-  const changeChartColor = (itemId: string, color: string) => {
+  const changeChartColor = (
+    itemId: string,
+    seriesKey: string,
+    color: string,
+  ) => {
     setDashboard((previousDashboard) => {
       if (!previousDashboard) return previousDashboard;
 
@@ -167,7 +188,7 @@ export default function DashboardEditor({
                 ...item,
                 color_config: {
                   ...item.color_config,
-                  primary: color,
+                  [seriesColorKey(seriesKey)]: color,
                 },
               }
             : item,
@@ -659,17 +680,26 @@ function RightArrowIcon() {
                       </select>
                     </label>
 
-                    <label className="text-xs font-bold uppercase tracking-wide text-stone-600">
-                      Primary color
-                      <input
-                        type="color"
-                        value={item.color_config.primary || "#f59e0b"}
-                        onChange={(event) =>
-                          changeChartColor(item.id, event.target.value)
-                        }
-                        className="mt-1 block h-10 w-16 cursor-pointer rounded-lg border border-amber-200 bg-white p-1"
-                      />
-                    </label>
+                    {item.chart_spec.series.map((series, seriesIndex) => (
+                      <label
+                        key={series.key}
+                        className="text-xs font-bold uppercase tracking-wide text-stone-600"
+                      >
+                        {series.label} color
+                        <input
+                          type="color"
+                          value={getChartColors(item)[seriesIndex]}
+                          onChange={(event) =>
+                            changeChartColor(
+                              item.id,
+                              series.key,
+                              event.target.value,
+                            )
+                          }
+                          className="mt-1 block h-10 w-16 cursor-pointer rounded-lg border border-amber-200 bg-white p-1"
+                        />
+                      </label>
+                    ))}
                   </div>
                   )}
                   <div className="flex items-center gap-2">
@@ -728,10 +758,7 @@ function RightArrowIcon() {
                 {item.chart_spec && (
                   <ChartRenderer
                     chart={item.chart_spec}
-                    colors={[
-                      item.color_config.primary || "#f59e0b",
-                      ...FALLBACK_CHART_COLORS,
-                    ]}
+                    colors={getChartColors(item)}
                   />
                 )}
               </article>

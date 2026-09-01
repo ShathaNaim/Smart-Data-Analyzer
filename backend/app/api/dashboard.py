@@ -97,3 +97,23 @@ def list_dashboards_endpoint(
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
 ) -> list[DashboardSummaryResponse]:
     return list_dashboards(db, owner_id, limit)
+
+@router.delete(
+    "/{dashboard_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_dashboard_endpoint(
+    dashboard_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+) -> None:
+    try:
+        dashboard = get_dashboard(db, dashboard_id, owner_id)
+        db.delete(dashboard)
+        db.commit()
+    except DashboardNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    

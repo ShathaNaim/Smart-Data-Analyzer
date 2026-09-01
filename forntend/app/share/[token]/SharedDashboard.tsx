@@ -27,11 +27,30 @@ const CHART_WIDTH_CLASSES: Record<number, string> = {
 
 
 const FALLBACK_CHART_COLORS = [
+  "#f59e0b",
   "#0ea5e9",
   "#10b981",
   "#8b5cf6",
   "#ef4444",
 ];
+
+
+const seriesColorKey = (seriesKey: string) => `series:${seriesKey}`;
+
+
+const getChartColors = (
+  item: SharedDashboardData["items"][number],
+): string[] => {
+  const seriesColors = item.chart_spec?.series.map((series, index) =>
+    item.color_config[seriesColorKey(series.key)] ||
+    (index === 0 ? item.color_config.primary : undefined) ||
+    FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length],
+  ) ?? FALLBACK_CHART_COLORS;
+
+  return item.chart_spec?.type === "pie"
+    ? [seriesColors[0], ...FALLBACK_CHART_COLORS.slice(1)]
+    : seriesColors;
+};
 
 
 function formatUpdatedDate(value: string): string {
@@ -219,10 +238,7 @@ export default function SharedDashboard({
                     {item.chart_spec && (
                       <ChartRenderer
                         chart={item.chart_spec}
-                        colors={[
-                          item.color_config.primary || "#f59e0b",
-                          ...FALLBACK_CHART_COLORS,
-                        ]}
+                        colors={getChartColors(item)}
                       />
                     )}
                   </article>

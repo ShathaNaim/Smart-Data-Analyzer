@@ -2,8 +2,11 @@ import os
 import uuid
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from backend.database import get_db
+from backend.models.dataset import Dataset
 from backend.schemas.question import (
     ClarificationResponse,
     CompletedAnalysisResponse,
@@ -37,6 +40,26 @@ from backend.schemas.suggestion_preview import (
 router = APIRouter()
 
 UPLOAD_FOLDER = "backend/uploads"
+
+
+def get_dataset_description(db: Session, file_id: str) -> str | None:
+    """Load stored user context for an uploaded dataset."""
+    try:
+        dataset_id = uuid.UUID(file_id)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found",
+        ) from error
+
+    dataset = db.get(Dataset, dataset_id)
+    if dataset is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Dataset not found",
+        )
+
+    return dataset.description
 
 
 def load_dataset(file_id: str) -> pd.DataFrame:
@@ -89,6 +112,7 @@ def get_summary(file_id: str):
 )
 def get_semantic_profile(
     file_id: str,
+    db: Session = Depends(get_db),
 ) -> SemanticDatasetProfile:
     """
     Generate a validated semantic profile for an uploaded dataset.
@@ -97,9 +121,13 @@ def get_semantic_profile(
     """
 
     df = load_dataset(file_id)
+    dataset_description = get_dataset_description(db, file_id)
 
     try:
-        return create_semantic_profile(df)
+        return create_semantic_profile(
+            df,
+            dataset_description=dataset_description,
+        )
     except SemanticProfileError as error:
         raise HTTPException(
             status_code=422,
@@ -149,8 +177,10 @@ def get_column_summary(file_id: str, column_name: str):
 def ask_dataset(
     file_id: str,
     request: QuestionRequest,
+    db: Session = Depends(get_db),
 ):
     df = load_dataset(file_id)
+    dataset_description = get_dataset_description(db, file_id)
 
     conversation_id = (
         request.conversation_id
@@ -162,6 +192,7 @@ def ask_dataset(
         df=df,
         question=request.question,
         history=request.history,
+        dataset_description=dataset_description,
     )
 
     # 2. Return the AI's clarification question without running pandas.
@@ -240,6 +271,7 @@ def ask_dataset(
 )
 def get_analysis_suggestions(
     file_id: str,
+    db: Session = Depends(get_db),
 ) -> AnalysisSuggestions:
     """
     Generate validated KPI and chart suggestions for an uploaded dataset.
@@ -248,9 +280,13 @@ def get_analysis_suggestions(
     """
 
     df = load_dataset(file_id)
+    dataset_description = get_dataset_description(db, file_id)
 
     try:
-        return generate_analysis_suggestions(df)
+        return generate_analysis_suggestions(
+            df,
+            dataset_description=dataset_description,
+        )
     except (
         SemanticProfileError,
         SuggestionGenerationError,

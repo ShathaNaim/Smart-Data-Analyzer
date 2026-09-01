@@ -24,6 +24,7 @@ type UploadeResult = {
   rows: number;
   columns: string[];
   preview: Record<string, unknown>[];
+  description?: string | null;
 };
 
 type NumericStats = Record<string, Record<string, number | null>>;
@@ -138,6 +139,7 @@ export default function Home() {
   const [suggestionPreviewError,setSuggestionPreviewError,] = useState<string | null>(null);
 
   const [suggestionsError, setSuggestionsError] =useState<string | null>(null);
+  const [datasetDescription, setDatasetDescription] = useState("");
 
   const scrollToSection = (getElement: () => HTMLElement | null) => {
     window.requestAnimationFrame(() => {
@@ -295,7 +297,7 @@ export default function Home() {
 
   try {
     const response = await fetch(
-      `http://127.0.0.1:8000/dataset/${result.file_id}/analysis-suggestions`,
+      `http://localhost:8000/dataset/${result.file_id}/analysis-suggestions`,
       {
         method: "POST",
       },
@@ -342,10 +344,16 @@ export default function Home() {
     setSuggestionsError(null);
     const formData = new FormData();
     formData.append("file", file);
-
+    if (datasetDescription.trim()) {
+      formData.append(
+        "description",
+        datasetDescription.trim(),
+      );
+    }
     try {
-      const response = await fetch("http://127.0.0.1:8000/upload", {
+      const response = await fetch("http://localhost:8000/upload", {
         method: "POST",
+        credentials: "include",
         body: formData,
       });
       const data = await response.json();
@@ -424,7 +432,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/dataset/${result.file_id}/summary`,
+        `http://localhost:8000/dataset/${result.file_id}/summary`,
       );
       const data = await response.json();
       if (!response.ok) {
@@ -451,7 +459,7 @@ const handleColumnClick = async (column: string) => {
 
   try {
     const response = await fetch(
-      `http://127.0.0.1:8000/dataset/${result.file_id}/column/${encodeURIComponent(column)}`,
+      `http://localhost:8000/dataset/${result.file_id}/column/${encodeURIComponent(column)}`,
     );
 
     const data = await response.json();
@@ -498,7 +506,7 @@ const handleColumnClick = async (column: string) => {
 
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/dataset/${result.file_id}/ask`,
+        `http://localhost:8000/dataset/${result.file_id}/ask`,
         {
           method: "POST",
           headers: {
@@ -629,7 +637,7 @@ const handleColumnClick = async (column: string) => {
           };
 
     const response = await fetch(
-      `http://127.0.0.1:8000/dataset/${result.file_id}/suggestion-preview`,
+      `http://localhost:8000/dataset/${result.file_id}/suggestion-preview`,
       {
         method: "POST",
         headers: {
@@ -681,7 +689,8 @@ const handleColumnClick = async (column: string) => {
     setPreviewingSuggestionId(null);
   }
 };
-          
+
+         
 
   return (
     <div className="min-h-screen bg-amber-50 lg:flex">
@@ -694,7 +703,7 @@ const handleColumnClick = async (column: string) => {
             Smart Data Analyzer
           </span>
           <h1 className="text-4xl font-black tracking-tight text-stone-900 sm:text-5xl">
-            Turn your CSV into
+            Turn your spreadsheet into
             <span className="block text-amber-500">clear insights.</span>
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-stone-600 sm:text-lg">
@@ -721,14 +730,14 @@ const handleColumnClick = async (column: string) => {
               </svg>
             </span>
             <span className="text-lg font-bold text-stone-800">
-              {file ? file.name : "Choose your CSV file"}
+              {file ? file.name : "Choose a CSV or Excel file"}
             </span>
             <span className="mt-1 text-sm text-stone-500">
               {file ? "Ready to analyze" : "Click here to browse your computer"}
             </span>
             <input
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={(event) => {
                 setFile(event.target.files ? event.target.files[0] : null);
                 setResult(null);
@@ -740,10 +749,43 @@ const handleColumnClick = async (column: string) => {
                 setKpis([]);
                 setAssumptions([]);
                 setWarnings([]);
+                setDatasetDescription("");
               }}
               className="sr-only"
             />
           </label>
+
+          <div className="mt-5">
+            <div className="flex items-center justify-between gap-3">
+              <label
+                htmlFor="dataset-description"
+                className="text-sm font-bold text-stone-800"
+              >
+                Describe your dataset
+              </label>
+              <span className="text-xs font-medium text-stone-400">
+                Optional
+              </span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-stone-500">
+              Explain what each row represents, important columns, units,
+              currencies, or values the AI should understand.
+            </p>
+            <textarea
+              id="dataset-description"
+              value={datasetDescription}
+              onChange={(event) =>
+                setDatasetDescription(event.target.value)
+              }
+              maxLength={2000}
+              rows={4}
+              placeholder="Example: Each row is an online order. Amount is revenue in JOD, and cancelled orders should not count as completed sales."
+              className="mt-3 block w-full resize-y rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3 text-sm leading-6 text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-100"
+            />
+            <p className="mt-1 text-right text-xs text-stone-400">
+              {datasetDescription.length.toLocaleString()} / 2,000
+            </p>
+          </div>
 
           <button
             onClick={handleUpload}
@@ -777,7 +819,7 @@ const handleColumnClick = async (column: string) => {
                   Choose a different file
                   <input
                     type="file"
-                    accept=".csv,text/csv"
+                    accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     onChange={(event) => {
                       setFile(event.target.files ? event.target.files[0] : null);
                       setResult(null);
@@ -789,6 +831,7 @@ const handleColumnClick = async (column: string) => {
                       setKpis([]);
                       setAssumptions([]);
                       setWarnings([]);
+                      setDatasetDescription("");
                     }}
                     className="sr-only"
                   />
