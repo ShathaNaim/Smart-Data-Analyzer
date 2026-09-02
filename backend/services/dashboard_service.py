@@ -25,7 +25,12 @@ def create_dashboard(
     db: Session, data: DashboardCreate, owner_id: uuid.UUID
 ) -> Dashboard:
     """Create and commit an empty dashboard for an existing dataset."""
-    dataset = db.get(Dataset, data.dataset_id)
+    dataset = db.scalar(
+        select(Dataset).where(
+            Dataset.id == data.dataset_id,
+            Dataset.owner_id == owner_id,
+        )
+    )
 
     if dataset is None:
         raise DatasetNotFoundError(
@@ -135,15 +140,17 @@ def list_dashboards(
     db: Session,
     owner_id: uuid.UUID,
     limit: int = 5,
+    dataset_id: uuid.UUID | None = None,
 ) -> list[DashboardSummaryResponse]:
     """Return a list of dashboards with summary information."""
     statement = (
         select(Dashboard)
         .options(selectinload(Dashboard.items))
         .where(Dashboard.owner_id == owner_id)
-        .order_by(Dashboard.updated_at.desc())
-        .limit(limit)
     )
+    if dataset_id is not None:
+        statement = statement.where(Dashboard.dataset_id == dataset_id)
+    statement = statement.order_by(Dashboard.updated_at.desc()).limit(limit)
     dashboards = db.scalars(statement).all()
 
     return [

@@ -1,12 +1,11 @@
-import os
 import uuid
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from backend.app.anonymous_identity import get_anonymous_owner_id
 from backend.database import get_db
-from backend.models.dataset import Dataset
 from backend.schemas.question import (
     ClarificationResponse,
     CompletedAnalysisResponse,
@@ -36,14 +35,18 @@ from backend.schemas.suggestion_preview import (
     SuggestionPreviewRequest,
     SuggestionPreviewResponse,
 )
+from backend.services.dataset_transformer import (
+    DatasetAccessError,
+    TransformationError,
+    get_owned_dataset,
+    load_working_dataset,
+)
 
 router = APIRouter()
 
-UPLOAD_FOLDER = "backend/uploads"
-
-
-def get_dataset_description(db: Session, file_id: str) -> str | None:
-    """Load stored user context for an uploaded dataset."""
+def load_owned_dataset(
+    file_id: str, db: Session, owner_id: uuid.UUID
+) -> tuple[pd.DataFrame, str | None]:
     try:
         dataset_id = uuid.UUID(file_id)
     except ValueError as error:
@@ -52,46 +55,20 @@ def get_dataset_description(db: Session, file_id: str) -> str | None:
             detail="Dataset not found",
         ) from error
 
-    dataset = db.get(Dataset, dataset_id)
-    if dataset is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Dataset not found",
-        )
-
-    return dataset.description
-
-
-def load_dataset(file_id: str) -> pd.DataFrame:
-    """Find and load an uploaded dataset by its generated ID."""
-    files = os.listdir(UPLOAD_FOLDER)
-
-    matched_file = next(
-        (
-            filename
-            for filename in files
-            if filename.startswith(file_id)
-        ),
-        None,
-    )
-
-    if not matched_file:
-        raise HTTPException(
-            status_code=404,
-            detail="File not found",
-        )
-
-    file_path = os.path.join(UPLOAD_FOLDER, matched_file)
-
-    if matched_file.endswith(".csv"):
-        return pd.read_csv(file_path)
-
-    return pd.read_excel(file_path)
+    try:
+        dataset = get_owned_dataset(db, dataset_id, owner_id)
+        return load_working_dataset(dataset), dataset.description
+    except (DatasetAccessError, TransformationError) as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @router.get("/dataset/{file_id}/summary")
-def get_summary(file_id: str):
-    df = load_dataset(file_id)
+def get_summary(
+    file_id: str,
+    db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+):
+    df, _ = load_owned_dataset(file_id, db, owner_id)
 
     return {
         "rows": len(df),
@@ -113,6 +90,7 @@ def get_summary(file_id: str):
 def get_semantic_profile(
     file_id: str,
     db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
 ) -> SemanticDatasetProfile:
     """
     Generate a validated semantic profile for an uploaded dataset.
@@ -120,8 +98,7 @@ def get_semantic_profile(
     This is a POST endpoint because it triggers an AI operation.
     """
 
-    df = load_dataset(file_id)
-    dataset_description = get_dataset_description(db, file_id)
+    df, dataset_description = load_owned_dataset(file_id, db, owner_id)
 
     try:
         return create_semantic_profile(
@@ -136,8 +113,13 @@ def get_semantic_profile(
 
 
 @router.get("/dataset/{file_id}/column/{column_name}")
-def get_column_summary(file_id: str, column_name: str):
-    df = load_dataset(file_id)
+def get_column_summary(
+    file_id: str,
+    column_name: str,
+    db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+):
+    df, _ = load_owned_dataset(file_id, db, owner_id)
 
     if column_name not in df.columns:
         raise HTTPException(
@@ -178,9 +160,9 @@ def ask_dataset(
     file_id: str,
     request: QuestionRequest,
     db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
 ):
-    df = load_dataset(file_id)
-    dataset_description = get_dataset_description(db, file_id)
+    df, dataset_description = load_owned_dataset(file_id, db, owner_id)
 
     conversation_id = (
         request.conversation_id
@@ -272,6 +254,7 @@ def ask_dataset(
 def get_analysis_suggestions(
     file_id: str,
     db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
 ) -> AnalysisSuggestions:
     """
     Generate validated KPI and chart suggestions for an uploaded dataset.
@@ -279,8 +262,7 @@ def get_analysis_suggestions(
     This endpoint returns calculation plans, not calculated results.
     """
 
-    df = load_dataset(file_id)
-    dataset_description = get_dataset_description(db, file_id)
+    df, dataset_description = load_owned_dataset(file_id, db, owner_id)
 
     try:
         return generate_analysis_suggestions(
@@ -306,6 +288,8 @@ def get_analysis_suggestions(
 def preview_analysis_suggestion(
     file_id: str,
     request: SuggestionPreviewRequest,
+    db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
 ) -> SuggestionPreviewResponse:
     """
     Safely execute one selected KPI or chart suggestion.
@@ -314,7 +298,7 @@ def preview_analysis_suggestion(
     trusted pandas operations.
     """
 
-    df = load_dataset(file_id)
+    df, _ = load_owned_dataset(file_id, db, owner_id)
 
     try:
         if request.output_type == "chart":

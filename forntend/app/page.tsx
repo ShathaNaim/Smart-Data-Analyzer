@@ -99,6 +99,7 @@ type SavedDashboardItem = {
 
 type SavedDashboard = {
   id: string;
+  dataset_id: string;
   name: string;
   items: SavedDashboardItem[];
 };
@@ -140,6 +141,7 @@ export default function Home() {
 
   const [suggestionsError, setSuggestionsError] =useState<string | null>(null);
   const [datasetDescription, setDatasetDescription] = useState("");
+  const [targetDashboardId, setTargetDashboardId] = useState<string | null>(null);
 
   const scrollToSection = (getElement: () => HTMLElement | null) => {
     window.requestAnimationFrame(() => {
@@ -165,7 +167,8 @@ export default function Home() {
     const dashboardStorageKey = `dashboard:${result.file_id}`;
 
     try {
-      const storedDashboardId = sessionStorage.getItem(dashboardStorageKey);
+      const storedDashboardId =
+        targetDashboardId ?? sessionStorage.getItem(dashboardStorageKey);
       let currentDashboard: SavedDashboard | null = null;
 
       if (storedDashboardId) {
@@ -177,10 +180,15 @@ export default function Home() {
 
         if (response.ok) {
           currentDashboard = data;
-        } else if (response.status === 404) {
+        } else if (response.status === 404 && !targetDashboardId) {
           sessionStorage.removeItem(dashboardStorageKey);
         } else {
-          throw new Error(data.detail || "Could not load the dashboard.");
+          throw new Error(
+            data.detail ||
+              (targetDashboardId
+                ? "The selected dashboard could not be loaded."
+                : "Could not load the dashboard."),
+          );
         }
       }
 
@@ -209,6 +217,10 @@ export default function Home() {
 
       if (!currentDashboard) {
         throw new Error("Could not prepare the dashboard.");
+      }
+
+      if (currentDashboard.dataset_id !== result.file_id) {
+        throw new Error("This dashboard belongs to a different dataset.");
       }
 
       const dashboard = currentDashboard;
@@ -300,6 +312,7 @@ export default function Home() {
       `http://localhost:8000/dataset/${result.file_id}/analysis-suggestions`,
       {
         method: "POST",
+        credentials: "include",
       },
     );
 
@@ -370,6 +383,52 @@ export default function Home() {
   };
   useEffect(() => {
     const restoreTimer = window.setTimeout(() => {
+      const query = new URLSearchParams(window.location.search);
+      const requestedDatasetId = query.get("dataset");
+      const requestedDashboardId = query.get("dashboard");
+
+      if (requestedDatasetId) {
+        setTargetDashboardId(requestedDashboardId);
+        setLoading(true);
+        setError(null);
+        void fetch(
+          `http://localhost:8000/datasets/${requestedDatasetId}?page=1&page_size=20`,
+          { credentials: "include" },
+        )
+          .then(async (response) => {
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+              throw new Error(data?.detail || "Could not reopen this dataset.");
+            }
+            setResult({
+              file_id: data.id,
+              filename: data.original_filename,
+              rows: data.row_count,
+              columns: data.columns,
+              preview: data.preview,
+              description: data.description,
+            });
+            setCharts([]);
+            setKpis([]);
+            setAnswer("");
+            setAssumptions([]);
+            setWarnings([]);
+            setSuggestions(null);
+          })
+          .catch((restoreError) => {
+            setError(
+              restoreError instanceof Error
+                ? restoreError.message
+                : "Could not reopen this dataset.",
+            );
+          })
+          .finally(() => {
+            setLoading(false);
+            setAnalysisRestored(true);
+          });
+        return;
+      }
+
       const stored = sessionStorage.getItem("currentAnalysis");
 
       if (stored) {
@@ -433,6 +492,7 @@ export default function Home() {
     try {
       const response = await fetch(
         `http://localhost:8000/dataset/${result.file_id}/summary`,
+        { credentials: "include" },
       );
       const data = await response.json();
       if (!response.ok) {
@@ -460,6 +520,7 @@ const handleColumnClick = async (column: string) => {
   try {
     const response = await fetch(
       `http://localhost:8000/dataset/${result.file_id}/column/${encodeURIComponent(column)}`,
+      { credentials: "include" },
     );
 
     const data = await response.json();
@@ -509,6 +570,7 @@ const handleColumnClick = async (column: string) => {
         `http://localhost:8000/dataset/${result.file_id}/ask`,
         {
           method: "POST",
+          credentials: "include",
           headers: {
             "Content-Type": "application/json",
           },
@@ -640,6 +702,7 @@ const handleColumnClick = async (column: string) => {
       `http://localhost:8000/dataset/${result.file_id}/suggestion-preview`,
       {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },

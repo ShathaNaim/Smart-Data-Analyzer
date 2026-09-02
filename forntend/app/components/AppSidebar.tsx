@@ -43,7 +43,7 @@ function formatUpdatedDate(value: string): string {
 }
 
 
-export default function AppSidebar() {
+export default function AppSidebar({ datasetId }: { datasetId?: string }) {
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [datasetsError, setDatasetsError] = useState<string | null>(null);
@@ -53,6 +53,7 @@ export default function AppSidebar() {
   const [deletingDashboardId, setDeletingDashboardId] = useState<
     string | null
   >(null);
+  const [deletingDatasetId, setDeletingDatasetId] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,7 +108,7 @@ export default function AppSidebar() {
 
       try {
         const response = await fetch(
-          "http://localhost:8000/dashboards?limit=5",
+          `http://localhost:8000/dashboards?limit=50${datasetId ? `&dataset_id=${encodeURIComponent(datasetId)}` : ""}`,
           {
             signal: controller.signal,
             credentials: "include",
@@ -147,7 +148,7 @@ export default function AppSidebar() {
     void loadDashboards();
 
     return () => controller.abort();
-  }, []);
+  }, [datasetId]);
 
   const handleDeleteDashboard = async (dashboard: DashboardSummary) => {
     const confirmed = window.confirm(
@@ -187,6 +188,50 @@ export default function AppSidebar() {
       );
     } finally {
       setDeletingDashboardId(null);
+    }
+  };
+
+    const handleDeleteDataset = async (dataset: DatasetSummary) => {
+    const confirmed = window.confirm(
+      `Delete “${dataset.original_filename}”? This action cannot be undone.`,
+    );
+
+    if (!confirmed) return;
+
+    setDeletingDatasetId(dataset.id);
+    setDatasetsError(null);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/datasets/${dataset.id}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+        },
+      );
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+
+        throw new Error(
+          data?.detail ?? "Could not delete the dataset.",
+        );
+      }
+
+      setDatasets((currentDatasets) =>
+        currentDatasets.filter((item) => item.id !== dataset.id),
+      );
+      setDashboards((currentDashboards) =>
+        currentDashboards.filter((item) => item.dataset_id !== dataset.id),
+      );
+    } catch (error) {
+      setDatasetsError(
+        error instanceof Error
+          ? error.message
+          : "Could not connect to the dataset service.",
+      );
+    } finally {
+      setDeletingDatasetId(null);
     }
   };
 
@@ -242,8 +287,10 @@ export default function AppSidebar() {
           {!datasetsLoading && datasets.length > 0 && (
             <div className="mt-3 space-y-2" aria-label="Uploaded datasets">
               {datasets.map((dataset) => (
-                <div
-                  key={dataset.id}
+                <div key={dataset.id} className="group relative rounded-xl border border-transparent transition hover:border-sky-200 hover:bg-sky-50">
+                <Link
+                  
+                  href={`/dataset/${dataset.id}`}
                   className="rounded-xl border border-transparent px-3 py-3 transition hover:border-sky-200 hover:bg-sky-50"
                 >
                   <p className="truncate font-bold text-stone-800" title={dataset.original_filename}>
@@ -257,7 +304,39 @@ export default function AppSidebar() {
                   <p className="mt-1 text-xs text-stone-400">
                     Uploaded {formatUpdatedDate(dataset.created_at)}
                   </p>
+                </Link>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteDataset(dataset)}
+                    disabled={deletingDatasetId !== null}
+                    aria-label={`Delete ${dataset.original_filename}`}
+                    title={`Delete ${dataset.original_filename}`}
+                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-lg text-stone-400 opacity-0 transition hover:bg-red-100 hover:text-red-600 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:cursor-wait disabled:opacity-50 group-hover:opacity-100"
+                  >
+                    {deletingDatasetId === dataset.id ? (
+                      <span
+                        aria-hidden="true"
+                        className="h-4 w-4 animate-spin rounded-full border-2 border-red-200 border-t-red-600"
+                      />
+                    ) : (
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className="h-4 w-4"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M4 7h16M10 11v6m4-6v6M9 7l1-3h4l1 3m3 0-1 13H7L6 7"
+                        />
+                      </svg>
+                    )}
+                  </button>
                 </div>
+                
               ))}
             </div>
           )}
@@ -266,7 +345,7 @@ export default function AppSidebar() {
         <div className="mt-8">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-bold uppercase tracking-wider text-stone-700">
-              My dashboards
+              {datasetId ? "Dataset dashboards" : "My dashboards"}
             </h3>
 
             <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-bold text-amber-800">

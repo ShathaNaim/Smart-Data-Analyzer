@@ -94,9 +94,10 @@ def save_dashboard_endpoint(
 def list_dashboards_endpoint(
     db: Session = Depends(get_db),
     limit: int = 5,
+    dataset_id: uuid.UUID | None = None,
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
 ) -> list[DashboardSummaryResponse]:
-    return list_dashboards(db, owner_id, limit)
+    return list_dashboards(db, owner_id, limit, dataset_id)
 
 @router.delete(
     "/{dashboard_id}",

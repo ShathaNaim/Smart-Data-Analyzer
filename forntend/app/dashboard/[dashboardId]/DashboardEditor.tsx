@@ -497,10 +497,10 @@ function RightArrowIcon() {
           </div>
           <div className="flex flex-wrap gap-3">
             <Link
-              href="/"
+              href={`/?dataset=${dashboard.dataset_id}&dashboard=${dashboard.id}`}
               className="rounded-xl border border-amber-300 px-4 py-3 font-bold text-amber-800 transition hover:bg-amber-50"
             >
-              Back to analysis
+              Add chart or KPI
             </Link>
             <button
               type="button"
@@ -568,7 +568,7 @@ function RightArrowIcon() {
         {dashboard.items.length === 0 ? (
           <div className="mt-6 rounded-2xl border-2 border-dashed border-amber-300 bg-white/70 p-12 text-center">
             <p className="font-bold text-stone-800">This dashboard is empty.</p>
-            <Link href="/" className="mt-2 inline-block text-sm font-semibold text-amber-700">
+            <Link href={`/?dataset=${dashboard.dataset_id}&dashboard=${dashboard.id}`} className="mt-2 inline-block text-sm font-semibold text-amber-700">
               Generate and add a chart or KPI
             </Link>
           </div>

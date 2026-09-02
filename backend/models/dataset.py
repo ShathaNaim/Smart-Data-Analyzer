@@ -1,11 +1,15 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.database import Base
+
+if TYPE_CHECKING:
+    from backend.models.dataset_transformation import DatasetTransformation
 
 
 class Dataset(Base):
@@ -63,4 +67,9 @@ class Dataset(Base):
         server_default=func.now(),
         nullable=False,
     )
-  
+
+    transformations: Mapped[list["DatasetTransformation"]] = relationship(
+        back_populates="dataset",
+        cascade="all, delete-orphan",
+        order_by="DatasetTransformation.created_at",
+    )

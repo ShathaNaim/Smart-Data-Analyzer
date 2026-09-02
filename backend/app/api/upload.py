@@ -53,6 +53,8 @@ async def upload_file(
         saved_filename
     )
 
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
