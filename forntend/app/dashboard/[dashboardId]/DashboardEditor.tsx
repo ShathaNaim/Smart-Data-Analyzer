@@ -9,6 +9,7 @@ import ChartRenderer, {
 import KpiCard, {
   type KpiSpec,
 } from "../../components/KpiCard";
+import { apiUrl } from "../../lib/api";
 
 
 type DashboardItem = {
@@ -103,7 +104,7 @@ export default function DashboardEditor({
 
       try {
         const response = await fetch(
-          `http://localhost:8000/dashboards/${dashboardId}`,
+          apiUrl(`/dashboards/${dashboardId}`),
           { signal: controller.signal, credentials: "include" },
         );
         const data = await response.json();
@@ -207,7 +208,7 @@ export default function DashboardEditor({
 
     try {
       const response = await fetch(
-        `http://localhost:8000/dashboards/${dashboard.id}`,
+        apiUrl(`/dashboards/${dashboard.id}`),
         {
           method: "PUT",
           credentials: "include",
@@ -272,7 +273,7 @@ export default function DashboardEditor({
 
     try {
       const response = await fetch(
-        `http://localhost:8000/dashboards/${dashboard.id}/share`,
+        apiUrl(`/dashboards/${dashboard.id}/share`),
         {
           method: "POST",
           credentials: "include",

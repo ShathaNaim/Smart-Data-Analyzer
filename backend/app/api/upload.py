@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import shutil
 import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
@@ -9,13 +8,20 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models.dataset import Dataset
 from backend.app.anonymous_identity import get_anonymous_owner_id
+from backend.services.object_storage import (
+    ObjectStorageError,
+    delete_object,
+    upload_object,
+)
+from backend.config import get_settings
 
 router = APIRouter()
 
-# it should be a database or a cloud storage in production, but we will use a local folder temporarily ############
-###################################################################################################################
-UPLOAD_FOLDER = "backend/uploads"
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx"}
+CONTENT_TYPES = {
+    ".csv": "text/csv",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 @router.post("/upload")
 async def upload_file(
@@ -45,38 +51,90 @@ async def upload_file(
             status_code=422,
             detail="Only CSV and Excel (.xlsx) files are supported.",
         )
+    settings = get_settings()
 
-    saved_filename = f"{file_id}{extension}"
+    # Measure the actual uploaded content instead of trusting request headers.
+    await file.seek(0)
+    file.file.seek(0, os.SEEK_END)
+    file_size = file.file.tell()
+    file.file.seek(0)
 
-    file_path = os.path.join(
-        UPLOAD_FOLDER,
-        saved_filename
-    )
+    if file_size == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="The uploaded file is empty.",
+        )
 
-    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    if file_size > settings.max_upload_size_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"The maximum supported file size is "
+                f"{settings.max_upload_size_mb} MB."
+            ),
+        )
 
     try:
         if extension == ".csv":
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(file.file)
         else:
-            df = pd.read_excel(file_path, engine="openpyxl")
+            df = pd.read_excel(file.file, engine="openpyxl")
     except Exception as error:
-        if os.path.exists(file_path):
-            os.remove(file_path)
         raise HTTPException(
             status_code=422,
             detail="The uploaded file could not be read as CSV or Excel.",
         ) from error
 
+    row_count = len(df.index)
+    column_count = len(df.columns)
+
+    if row_count == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="The dataset must contain at least one data row.",
+        )
+
+    if column_count == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="The dataset must contain at least one column.",
+        )
+
+    if row_count > settings.max_dataset_rows:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"The maximum supported dataset size is "
+                f"{settings.max_dataset_rows:,} rows."
+            ),
+        )
+
+    if column_count > settings.max_dataset_columns:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"The maximum supported number of columns is "
+                f"{settings.max_dataset_columns:,}."
+            ),
+        )
+
+    await file.seek(0)
+    object_key = f"datasets/{owner_id}/{file_id}{extension}"
+
+    try:
+        upload_object(file.file, object_key, CONTENT_TYPES[extension])
+    except ObjectStorageError as error:
+        raise HTTPException(
+            status_code=503,
+            detail="File storage is temporarily unavailable.",
+        ) from error
+
     dataset = Dataset(
         id=uuid.UUID(file_id),
         original_filename=file.filename,
-        stored_filename=saved_filename,
+        stored_filename=object_key,
         extension=extension,
-        file_size=os.path.getsize(file_path),
+        file_size=file_size,
         row_count=len(df),
         columns=[str(column) for column in df.columns],
         description=clean_description,
@@ -85,12 +143,16 @@ async def upload_file(
     try:
         db.add(dataset)
         db.commit()
-    except Exception:
+    except Exception as error:
         db.rollback()
+        try:
+            delete_object(object_key)
+        except ObjectStorageError:
+            pass
         raise HTTPException(
             status_code=500,
             detail="Failed to save dataset metadata to the database.",
-        )
+        ) from error
 
     return {
         "file_id": file_id,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AppSidebar from "../../components/AppSidebar";
+import { apiUrl } from "../../lib/api";
 
 type Transformation = {
   id: string;
@@ -72,7 +73,7 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
     setError(null);
     try {
       const response = await fetch(
-        `http://localhost:8000/datasets/${datasetId}?page=${requestedPage}&page_size=20`,
+        apiUrl(`/datasets/${datasetId}?page=${requestedPage}&page_size=20`),
         { credentials: "include" },
       );
       const data = await response.json().catch(() => null);
@@ -117,7 +118,7 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/datasets/${datasetId}/transformations`,
+        apiUrl(`/datasets/${datasetId}/transformations`),
         {
           method: "POST",
           credentials: "include",
@@ -144,7 +145,7 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
     setError(null);
     try {
       const response = await fetch(
-        `http://localhost:8000/datasets/${datasetId}/transformations/${latest.id}`,
+        apiUrl(`/datasets/${datasetId}/transformations/${latest.id}`),
         { method: "DELETE", credentials: "include" },
       );
       if (!response.ok) {

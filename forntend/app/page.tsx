@@ -9,6 +9,7 @@ import KpiCard, {
   type KpiSpec,
 } from "./components/KpiCard";
 import AppSidebar from "./components/AppSidebar";
+import { apiUrl } from "./lib/api";
 
 import type {
   AnalysisSuggestions,
@@ -104,6 +105,10 @@ type SavedDashboard = {
   items: SavedDashboardItem[];
 };
 
+const MAX_UPLOAD_SIZE_MB = 25;
+const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+const SUPPORTED_UPLOAD_EXTENSIONS = [".csv", ".xlsx"];
+
 export default function Home() {
   const router = useRouter();
   const analysisResultsRef = useRef<HTMLDivElement>(null);
@@ -151,6 +156,50 @@ export default function Home() {
     });
   };
 
+  const handleFileSelection = (selectedFile: File | null) => {
+    setResult(null);
+    setSummary(null);
+    setError(null);
+    setAnswer("");
+    setAskError(null);
+    setCharts([]);
+    setKpis([]);
+    setAssumptions([]);
+    setWarnings([]);
+    setDatasetDescription("");
+
+    if (!selectedFile) {
+      setFile(null);
+      return;
+    }
+
+    const extension = selectedFile.name
+      .slice(selectedFile.name.lastIndexOf("."))
+      .toLowerCase();
+
+    if (!SUPPORTED_UPLOAD_EXTENSIONS.includes(extension)) {
+      setFile(null);
+      setError("Only CSV and Excel (.xlsx) files are supported.");
+      return;
+    }
+
+    if (selectedFile.size === 0) {
+      setFile(null);
+      setError("The selected file is empty.");
+      return;
+    }
+
+    if (selectedFile.size > MAX_UPLOAD_SIZE_BYTES) {
+      setFile(null);
+      setError(
+        `The maximum supported file size is ${MAX_UPLOAD_SIZE_MB} MB.`,
+      );
+      return;
+    }
+
+    setFile(selectedFile);
+  };
+
   const handleAddToDashboard = async (
     dashboardItem:
       | { type: "chart"; spec: ChartSpec }
@@ -173,7 +222,7 @@ export default function Home() {
 
       if (storedDashboardId) {
         const response = await fetch(
-          `http://localhost:8000/dashboards/${storedDashboardId}`,
+          apiUrl(`/dashboards/${storedDashboardId}`),
           { credentials: "include" },
         );
         const data = await response.json();
@@ -194,7 +243,7 @@ export default function Home() {
 
       if (!currentDashboard) {
         const response = await fetch(
-          "http://localhost:8000/dashboards",
+          apiUrl("/dashboards"),
           {
             method: "POST",
             credentials: "include",
@@ -267,7 +316,7 @@ export default function Home() {
           ];
 
       const response = await fetch(
-        `http://localhost:8000/dashboards/${dashboard.id}`,
+        apiUrl(`/dashboards/${dashboard.id}`),
         {
           method: "PUT",
           credentials: "include",
@@ -309,7 +358,7 @@ export default function Home() {
 
   try {
     const response = await fetch(
-      `http://localhost:8000/dataset/${result.file_id}/analysis-suggestions`,
+      apiUrl(`/dataset/${result.file_id}/analysis-suggestions`),
       {
         method: "POST",
         credentials: "include",
@@ -339,6 +388,14 @@ export default function Home() {
 
   const handleUpload = async () => {
     if (!file) return;
+
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      setError(
+        `The maximum supported file size is ${MAX_UPLOAD_SIZE_MB} MB.`,
+      );
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSummary(null);
@@ -364,14 +421,19 @@ export default function Home() {
       );
     }
     try {
-      const response = await fetch("http://localhost:8000/upload", {
+      const response = await fetch(apiUrl("/upload"), {
         method: "POST",
         credentials: "include",
         body: formData,
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(data.detail || "Could not upload the file.");
+        throw new Error(
+          data?.detail ||
+            (response.status === 413
+              ? `The maximum supported file size is ${MAX_UPLOAD_SIZE_MB} MB.`
+              : "Could not upload the file."),
+        );
       }
       setResult(data);
     } catch (error) {
@@ -392,7 +454,7 @@ export default function Home() {
         setLoading(true);
         setError(null);
         void fetch(
-          `http://localhost:8000/datasets/${requestedDatasetId}?page=1&page_size=20`,
+          apiUrl(`/datasets/${requestedDatasetId}?page=1&page_size=20`),
           { credentials: "include" },
         )
           .then(async (response) => {
@@ -491,7 +553,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/dataset/${result.file_id}/summary`,
+        apiUrl(`/dataset/${result.file_id}/summary`),
         { credentials: "include" },
       );
       const data = await response.json();
@@ -519,7 +581,7 @@ const handleColumnClick = async (column: string) => {
 
   try {
     const response = await fetch(
-      `http://localhost:8000/dataset/${result.file_id}/column/${encodeURIComponent(column)}`,
+      apiUrl(`/dataset/${result.file_id}/column/${encodeURIComponent(column)}`),
       { credentials: "include" },
     );
 
@@ -567,7 +629,7 @@ const handleColumnClick = async (column: string) => {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/dataset/${result.file_id}/ask`,
+      apiUrl(`/dataset/${result.file_id}/ask`),
         {
           method: "POST",
           credentials: "include",
@@ -699,7 +761,7 @@ const handleColumnClick = async (column: string) => {
           };
 
     const response = await fetch(
-      `http://localhost:8000/dataset/${result.file_id}/suggestion-preview`,
+      apiUrl(`/dataset/${result.file_id}/suggestion-preview`),
       {
         method: "POST",
         credentials: "include",
@@ -796,23 +858,16 @@ const handleColumnClick = async (column: string) => {
               {file ? file.name : "Choose a CSV or Excel file"}
             </span>
             <span className="mt-1 text-sm text-stone-500">
-              {file ? "Ready to analyze" : "Click here to browse your computer"}
+              {file
+                ? `${(file.size / (1024 * 1024)).toFixed(2)} MB · Ready to analyze`
+                : `CSV or Excel (.xlsx), up to ${MAX_UPLOAD_SIZE_MB} MB`}
             </span>
             <input
               type="file"
               accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={(event) => {
-                setFile(event.target.files ? event.target.files[0] : null);
-                setResult(null);
-                setSummary(null);
-                setError(null);
-                setAnswer("");
-                setAskError(null);
-                setCharts([]);
-                setKpis([]);
-                setAssumptions([]);
-                setWarnings([]);
-                setDatasetDescription("");
+                handleFileSelection(event.target.files?.[0] ?? null);
+                event.target.value = "";
               }}
               className="sr-only"
             />
@@ -884,17 +939,8 @@ const handleColumnClick = async (column: string) => {
                     type="file"
                     accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     onChange={(event) => {
-                      setFile(event.target.files ? event.target.files[0] : null);
-                      setResult(null);
-                      setSummary(null);
-                      setError(null);
-                      setAnswer("");
-                      setAskError(null);
-                      setCharts([]);
-                      setKpis([]);
-                      setAssumptions([]);
-                      setWarnings([]);
-                      setDatasetDescription("");
+                      handleFileSelection(event.target.files?.[0] ?? null);
+                      event.target.value = "";
                     }}
                     className="sr-only"
                   />

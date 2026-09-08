@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import ChartRenderer from "../../components/ChartRenderer";
 import KpiCard from "../../components/KpiCard";
+import { apiUrl } from "../../lib/api";
 import type {
   SharedDashboard as SharedDashboardData,
 } from "../../types/sharedDashboard";
@@ -85,7 +86,7 @@ export default function SharedDashboard({
 
       try {
         const response = await fetch(
-          `http://127.0.0.1:8000/shared-dashboards/${encodeURIComponent(token)}`,
+          apiUrl(`/shared-dashboards/${encodeURIComponent(token)}`),
           {
             signal: controller.signal,
           },

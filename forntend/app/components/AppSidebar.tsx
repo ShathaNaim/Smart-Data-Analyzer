@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { apiUrl } from "../lib/api";
 
 
 type DashboardSummary = {
@@ -64,7 +65,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
 
       try {
         const response = await fetch(
-          "http://localhost:8000/datasets?limit=5",
+          apiUrl("/datasets?limit=5"),
           {
             signal: controller.signal,
             credentials: "include",
@@ -108,7 +109,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
 
       try {
         const response = await fetch(
-          `http://localhost:8000/dashboards?limit=50${datasetId ? `&dataset_id=${encodeURIComponent(datasetId)}` : ""}`,
+          apiUrl(`/dashboards?limit=50${datasetId ? `&dataset_id=${encodeURIComponent(datasetId)}` : ""}`),
           {
             signal: controller.signal,
             credentials: "include",
@@ -162,7 +163,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/dashboards/${dashboard.id}`,
+        apiUrl(`/dashboards/${dashboard.id}`),
         {
           method: "DELETE",
           credentials: "include",
@@ -203,7 +204,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
 
     try {
       const response = await fetch(
-        `http://localhost:8000/datasets/${dataset.id}`,
+        apiUrl(`/datasets/${dataset.id}`),
         {
           method: "DELETE",
           credentials: "include",

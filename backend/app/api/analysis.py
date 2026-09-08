@@ -15,10 +15,10 @@ from backend.services.analysis_executor import (
     AnalysisExecutionError,
     execute_analysis_plan,
 )
+from backend.services.ai_rate_limiter import enforce_ai_usage_limit
 from backend.services.analysis_planner import create_analysis_plan
 from backend.services.insight_generator import generate_chart_insight
 from backend.services.insight_polisher import polish_chart_insight
-from backend.services.kpi_executor import execute_kpi_plan
 from backend.services.warning_generator import generate_analysis_warnings
 from backend.services.kpi_executor import execute_kpi_plan
 from backend.schemas.semantic_profile import SemanticDatasetProfile
@@ -91,6 +91,7 @@ def get_semantic_profile(
     file_id: str,
     db: Session = Depends(get_db),
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    _ai_usage: None = Depends(enforce_ai_usage_limit),
 ) -> SemanticDatasetProfile:
     """
     Generate a validated semantic profile for an uploaded dataset.
@@ -161,6 +162,7 @@ def ask_dataset(
     request: QuestionRequest,
     db: Session = Depends(get_db),
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    _ai_usage: None = Depends(enforce_ai_usage_limit),
 ):
     df, dataset_description = load_owned_dataset(file_id, db, owner_id)
 
@@ -255,6 +257,7 @@ def get_analysis_suggestions(
     file_id: str,
     db: Session = Depends(get_db),
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    _ai_usage: None = Depends(enforce_ai_usage_limit),
 ) -> AnalysisSuggestions:
     """
     Generate validated KPI and chart suggestions for an uploaded dataset.

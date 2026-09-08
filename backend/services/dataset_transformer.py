@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+from io import BytesIO
 import os
 import re
 import uuid
@@ -13,9 +14,10 @@ from sqlalchemy.orm import Session, selectinload
 from backend.models.dataset import Dataset
 from backend.models.dataset_transformation import DatasetTransformation
 from backend.services.dataset_profiler import json_safe_value
+from backend.services.object_storage import ObjectStorageError, download_object
 
 
-UPLOAD_FOLDER = "backend/uploads"
+LEGACY_UPLOAD_FOLDER = "backend/uploads"
 
 
 class DatasetAccessError(ValueError):
@@ -100,12 +102,22 @@ def get_owned_dataset(db: Session, dataset_id: uuid.UUID, owner_id: uuid.UUID) -
 
 
 def load_original_dataset(dataset: Dataset) -> pd.DataFrame:
-    file_path = os.path.join(UPLOAD_FOLDER, dataset.stored_filename)
-    if not os.path.isfile(file_path):
-        raise DatasetAccessError("The stored dataset file could not be found.")
-    if dataset.extension == ".csv":
-        return pd.read_csv(file_path)
-    return pd.read_excel(file_path, engine="openpyxl")
+    if os.path.basename(dataset.stored_filename) == dataset.stored_filename:
+        legacy_path = os.path.join(LEGACY_UPLOAD_FOLDER, dataset.stored_filename)
+        if os.path.isfile(legacy_path):
+            if dataset.extension == ".csv":
+                return pd.read_csv(legacy_path)
+            return pd.read_excel(legacy_path, engine="openpyxl")
+
+    try:
+        stream = BytesIO(download_object(dataset.stored_filename))
+        if dataset.extension == ".csv":
+            return pd.read_csv(stream)
+        return pd.read_excel(stream, engine="openpyxl")
+    except (ObjectStorageError, ValueError, OSError) as error:
+        raise DatasetAccessError(
+            "The stored dataset file could not be loaded."
+        ) from error
 
 
 def apply_transformations(

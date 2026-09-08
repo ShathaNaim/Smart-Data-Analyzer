@@ -1,4 +1,5 @@
 import math
+import logging
 import os
 import uuid
 
@@ -17,7 +18,7 @@ from backend.schemas.dataset_transformation import (
     TransformationResponse,
 )
 from backend.services.dataset_transformer import (
-    UPLOAD_FOLDER,
+    LEGACY_UPLOAD_FOLDER,
     DatasetAccessError,
     TransformationError,
     apply_transformations,
@@ -26,6 +27,10 @@ from backend.services.dataset_transformer import (
     load_original_dataset,
     load_working_dataset,
 )
+from backend.services.object_storage import ObjectStorageError, delete_object
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -67,35 +72,30 @@ def delete_dataset_endpoint(
     except DatasetAccessError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
-    if os.path.basename(dataset.stored_filename) != dataset.stored_filename:
-        raise HTTPException(status_code=500, detail="The stored filename is invalid.")
-
-    file_path = os.path.join(UPLOAD_FOLDER, dataset.stored_filename)
-    staged_path = f"{file_path}.deleting-{uuid.uuid4()}"
-    file_was_staged = False
+    object_key = dataset.stored_filename
 
     try:
-        if os.path.isfile(file_path):
-            os.replace(file_path, staged_path)
-            file_was_staged = True
         db.delete(dataset)
         db.commit()
     except Exception as error:
         db.rollback()
-        if file_was_staged and os.path.isfile(staged_path):
-            os.replace(staged_path, file_path)
         raise HTTPException(
             status_code=500,
             detail="Could not delete the dataset.",
         ) from error
 
-    if file_was_staged:
+    if os.path.basename(object_key) == object_key:
+        legacy_path = os.path.join(LEGACY_UPLOAD_FOLDER, object_key)
         try:
-            os.remove(staged_path)
+            if os.path.isfile(legacy_path):
+                os.remove(legacy_path)
         except OSError:
-            # The database deletion succeeded; a stale staged file can be
-            # cleaned up later without exposing the dataset to the user.
-            pass
+            logger.exception("Could not delete legacy dataset file %s", legacy_path)
+    else:
+        try:
+            delete_object(object_key)
+        except ObjectStorageError:
+            logger.exception("Could not delete orphaned R2 object %s", object_key)
 
 
 @router.get("/{dataset_id}", response_model=DatasetDetailResponse)
