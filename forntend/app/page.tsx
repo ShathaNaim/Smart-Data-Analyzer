@@ -9,6 +9,8 @@ import KpiCard, {
   type KpiSpec,
 } from "./components/KpiCard";
 import AppSidebar from "./components/AppSidebar";
+import DataCleaningPanel from "./components/DataCleaningPanel";
+import DataValue from "./components/DataValue";
 import { apiUrl } from "./lib/api";
 
 import type {
@@ -446,6 +448,14 @@ export default function Home() {
   useEffect(() => {
     const restoreTimer = window.setTimeout(() => {
       const query = new URLSearchParams(window.location.search);
+      // A full navigation resets local state and detaches pending requests.
+      // Clear the persisted result before the normal restoration path runs.
+      if (query.get("new") === "1") {
+        sessionStorage.removeItem("currentAnalysis");
+        window.history.replaceState(window.history.state, "", "/");
+        setAnalysisRestored(true);
+        return;
+      }
       const requestedDatasetId = query.get("dataset");
       const requestedDashboardId = query.get("dashboard");
 
@@ -962,6 +972,12 @@ const handleColumnClick = async (column: string) => {
                 </div>
               </div>
 
+              <DataCleaningPanel
+                key={result.file_id}
+                datasetId={result.file_id}
+                columns={result.columns}
+                disabled={loading || summaryLoading || askLoading || columnLoading || suggestionsLoading || previewingSuggestionId !== null || addingItemId !== null}
+              />
               <button
                 onClick={handleSummary}
                 disabled={loading || summaryLoading}
@@ -971,7 +987,6 @@ const handleColumnClick = async (column: string) => {
               </button>
               </div>
 
-              {summary && (
                 <div
                   ref={summarySectionRef}
                   className="order-4 mt-8 scroll-mt-6 rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-8"
@@ -983,6 +998,7 @@ const handleColumnClick = async (column: string) => {
                     <p className="text-xs text-stone-500">
                       Showing the first {result.preview.length} rows
                     </p>
+                    <p className="mt-1 text-xs text-stone-500">No value means the cell is missing or unavailable. Zero is shown as 0.</p>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full border-collapse text-left text-sm">
@@ -1007,7 +1023,7 @@ const handleColumnClick = async (column: string) => {
                                 key={column}
                                 className="max-w-64 whitespace-nowrap border-r border-amber-100 px-4 py-3 text-stone-600 last:border-r-0"
                               >
-                                {row[column] == null ? "—" : String(row[column])}
+                                <DataValue value={row[column]} />
                               </td>
                             ))}
                           </tr>
@@ -1091,9 +1107,7 @@ const handleColumnClick = async (column: string) => {
                             <div key={statistic} className="rounded-lg bg-white p-3">
                               <p className="text-xs font-semibold uppercase text-stone-500">{statistic}</p>
                               <p className="mt-1 font-bold text-stone-800">
-                                {columnDetails[statistic] == null
-                                  ? "—"
-                                  : columnDetails[statistic].toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                <DataValue value={columnDetails[statistic]} statistic />
                               </p>
                             </div>
                           ))}
@@ -1135,7 +1149,7 @@ const handleColumnClick = async (column: string) => {
                               <td className="px-4 py-3 font-semibold text-stone-800">{statistic}</td>
                               {Object.entries(summary.numeric_summary).map(([column, values]) => (
                                 <td key={column} className="whitespace-nowrap px-4 py-3 text-stone-600">
-                                  {values[statistic] == null ? "—" : Number(values[statistic]).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  <DataValue value={values[statistic]} statistic />
                                 </td>
                               ))}
                             </tr>
@@ -1147,7 +1161,6 @@ const handleColumnClick = async (column: string) => {
                 </div>
               )}
                 </div>
-              )}
             </div>
           )}
         </div>

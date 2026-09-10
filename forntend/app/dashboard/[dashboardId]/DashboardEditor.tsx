@@ -10,6 +10,8 @@ import KpiCard, {
   type KpiSpec,
 } from "../../components/KpiCard";
 import { apiUrl } from "../../lib/api";
+import ChartTextEditor from "../../components/ChartTextEditor";
+import type { ChartText } from "../../components/ChartRenderer";
 
 
 type DashboardItem = {
@@ -196,6 +198,18 @@ export default function DashboardEditor({
         ),
       };
     });
+    setSavedMessage(null);
+  };
+
+  const changeChartText = (itemId: string, text: ChartText | null) => {
+    setDashboard((previous) => previous ? {
+      ...previous,
+      items: previous.items.map((item) => item.id === itemId && item.chart_spec ? {
+        ...item,
+        title: text?.title?.trim() || item.chart_spec.title.slice(0, 255),
+        chart_spec: { ...item.chart_spec, text },
+      } : item),
+    } : previous);
     setSavedMessage(null);
   };
 
@@ -756,6 +770,9 @@ function RightArrowIcon() {
                     </button>
                   </div>
                 </div>
+                {item.chart_spec && (
+                  <ChartTextEditor chart={item.chart_spec} disabled={saving} onChange={(text) => changeChartText(item.id, text)} />
+                )}
                 {item.chart_spec && (
                   <ChartRenderer
                     chart={item.chart_spec}

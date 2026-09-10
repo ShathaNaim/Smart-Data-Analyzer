@@ -7,7 +7,9 @@ import dotenv
 import pandas as pd
 from langchain_openai import ChatOpenAI
 
+from backend.services.performance import timed_stage
 from backend.schemas.analysis_suggestion import AnalysisSuggestions
+from backend.schemas.semantic_profile import SemanticDatasetProfile
 from backend.services.analysis_executor import (
     AnalysisExecutionError,
     validate_plan_columns,
@@ -85,19 +87,22 @@ class SuggestionGenerationError(ValueError):
     """Raised when AI-generated suggestions are unsafe or invalid."""
 
 
+@timed_stage("suggestion_generation")
 def generate_analysis_suggestions(
     df: pd.DataFrame,
     dataset_description: str | None = None,
+    semantic_profile: SemanticDatasetProfile | None = None,
 ) -> AnalysisSuggestions:
     """
     Generate validated KPI and chart plans without calculating their results.
     """
 
     metadata = build_dataset_profile(df)
-    semantic_profile = create_semantic_profile(
-        df,
-        dataset_description=dataset_description,
-    )
+    if semantic_profile is None:
+        semantic_profile = create_semantic_profile(
+            df,
+            dataset_description=dataset_description,
+        )
 
     llm = ChatOpenAI(
         model="gpt-4o-mini",

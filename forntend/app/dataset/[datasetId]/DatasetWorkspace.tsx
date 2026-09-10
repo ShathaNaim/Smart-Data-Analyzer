@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AppSidebar from "../../components/AppSidebar";
+import DataValue from "../../components/DataValue";
 import { apiUrl } from "../../lib/api";
 
 type Transformation = {
   id: string;
-  transformation_type: "calculated_column" | "rename_column" | "hide_column";
+  transformation_type: "calculated_column" | "rename_column" | "hide_column" | "trim_whitespace" | "remove_duplicates";
   config: Record<string, string | number>;
   created_at: string;
 };
@@ -44,6 +45,8 @@ function formatBytes(bytes: number) {
 
 function describeTransformation(item: Transformation) {
   const config = item.config;
+  if (item.transformation_type === "trim_whitespace") return `Trim whitespace in ${config.column_name}`;
+  if (item.transformation_type === "remove_duplicates") return "Remove exact duplicate rows (keep first)";
   if (item.transformation_type === "hide_column") {
     return `Hide ${config.column_name}`;
   }
@@ -210,7 +213,7 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
                           <tr key={index} className="hover:bg-amber-50/50">
                             {dataset.columns.map((column) => (
                               <td key={column} className="max-w-64 truncate whitespace-nowrap px-4 py-3 text-stone-700" title={String(row[column] ?? "")}>
-                                {row[column] == null ? <span className="text-stone-300">null</span> : String(row[column])}
+                                <DataValue value={row[column]} />
                               </td>
                             ))}
                           </tr>

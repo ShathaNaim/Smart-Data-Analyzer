@@ -16,6 +16,25 @@ def transformation(kind: str, **config):
 
 
 class DatasetTransformerTests(unittest.TestCase):
+    def test_trim_preserves_missing_numbers_and_original(self) -> None:
+        source = pd.DataFrame({"mixed": [" Amman ", None, 42, "  "], "number": pd.Series([1, None, 3, 4], dtype="Int64")})
+        result = apply_transformations(source, [
+            transformation("trim_whitespace", column_name="mixed"),
+            transformation("trim_whitespace", column_name="number"),
+        ])
+        self.assertEqual(result["mixed"].tolist(), ["Amman", None, 42, ""])
+        pd.testing.assert_series_equal(result["number"], source["number"])
+        self.assertEqual(source["mixed"].iloc[0], " Amman ")
+
+    def test_duplicates_keep_first_and_undo_by_replay(self) -> None:
+        source = pd.DataFrame({"city": [" Amman", "Amman", "Amman"], "value": [1, 1, 2]})
+        trim = transformation("trim_whitespace", column_name="city")
+        result = apply_transformations(source, [trim, transformation("remove_duplicates")])
+        self.assertEqual(result.index.tolist(), [0, 2])
+        self.assertEqual(result["value"].tolist(), [1, 2])
+        self.assertEqual(len(apply_transformations(source, [trim])), 3)
+        self.assertEqual(len(source), 3)
+
     def test_evaluates_chained_formula_with_parentheses(self) -> None:
         source = pd.DataFrame(
             {"col1": [2, 3], "col2": [4, 5], "col3": [1, 2]}

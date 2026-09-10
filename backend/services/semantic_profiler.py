@@ -6,6 +6,7 @@ import dotenv
 import pandas as pd
 from langchain_openai import ChatOpenAI
 
+from backend.services.performance import timed_stage
 from backend.schemas.semantic_profile import SemanticDatasetProfile
 from backend.services.dataset_profiler import build_dataset_profile
 
@@ -75,6 +76,7 @@ class SemanticProfileError(ValueError):
     """Raised when the semantic profile is incomplete or invalid."""
 
 
+@timed_stage("semantic_profile_generation")
 def create_semantic_profile(
     df: pd.DataFrame,
     dataset_description: str | None = None,

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import pandas as pd
 
+from backend.services.performance import timed_stage
 from backend.schemas.question import AnalysisPlan, ChartSpec
 from backend.services.analysis_executor import apply_filters, prepare_dimensions
 
 
+@timed_stage("analysis_warnings")
 def generate_analysis_warnings(
     df: pd.DataFrame,
     plan: AnalysisPlan,

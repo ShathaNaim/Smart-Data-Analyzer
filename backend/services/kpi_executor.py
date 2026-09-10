@@ -6,6 +6,7 @@ import re
 import numpy as np
 import pandas as pd
 
+from backend.services.performance import timed_stage
 from backend.schemas.question import KpiAnalysisPlan, KpiSpec
 from backend.services.analysis_executor import (
     AnalysisExecutionError,
@@ -24,6 +25,7 @@ NUMERIC_AGGREGATIONS = {
 }
 
 
+@timed_stage("kpi_calculation")
 def execute_kpi_plan(
     df: pd.DataFrame,
     plan: KpiAnalysisPlan,

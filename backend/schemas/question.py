@@ -361,6 +361,16 @@ class ChartSeries(StrictSchema):
         return self
 
 
+class ChartText(StrictSchema):
+    """Display overrides; data keys and generated labels remain intact."""
+
+    title: str | None = Field(default=None, max_length=255)
+    subtitle: str | None = Field(default=None, max_length=500)
+    x_axis: str | None = Field(default=None, max_length=200)
+    y_axis: str | None = Field(default=None, max_length=200)
+    series: dict[str, Annotated[str, Field(max_length=200)]] = Field(default_factory=dict)
+
+
 class ChartSpec(StrictSchema):
     id: str = Field(min_length=1, max_length=100)
 
@@ -377,6 +387,8 @@ class ChartSpec(StrictSchema):
     subtitle: str | None = Field(default=None, max_length=500)
 
     x_axis: ChartAxis
+
+    text: ChartText | None = None
 
     series: list[ChartSeries] = Field(
         min_length=1,

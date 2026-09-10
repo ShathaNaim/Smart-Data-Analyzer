@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { apiUrl } from "../lib/api";
 
 
@@ -45,6 +45,9 @@ function formatUpdatedDate(value: string): string {
 
 
 export default function AppSidebar({ datasetId }: { datasetId?: string }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const navigationId = useId();
+  const menuButton = useRef<HTMLButtonElement>(null);
   const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [datasetsError, setDatasetsError] = useState<string | null>(null);
@@ -237,8 +240,33 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
   };
 
   return (
-    <aside className="hidden min-h-screen w-72 shrink-0 border-r border-stone-200 bg-white lg:block">
-      <div className="sticky top-0 flex h-screen flex-col overflow-y-auto p-5">
+    <aside
+      aria-label="Workspace navigation"
+      className="w-full shrink-0 border-b border-stone-200 bg-white lg:min-h-screen lg:w-72 lg:border-b-0 lg:border-r"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && mobileOpen) {
+          setMobileOpen(false);
+          menuButton.current?.focus();
+        }
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 px-5 py-3 lg:hidden">
+        <span className="font-black text-stone-900">Smart Analyzer</span>
+        <button
+          ref={menuButton}
+          type="button"
+          aria-expanded={mobileOpen}
+          aria-controls={navigationId}
+          onClick={() => setMobileOpen((open) => !open)}
+          className="min-h-11 rounded-lg border border-amber-300 px-4 py-2 font-bold text-amber-900 focus:outline-none focus:ring-4 focus:ring-amber-200"
+        >
+          {mobileOpen ? "Close menu" : "Menu"}
+        </button>
+      </div>
+      <div
+        id={navigationId}
+        className={`${mobileOpen ? "flex" : "hidden"} max-h-[75dvh] flex-col overflow-y-auto p-5 lg:sticky lg:top-0 lg:flex lg:h-screen lg:max-h-none`}
+      >
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-amber-600">
             Smart Analyzer
@@ -248,12 +276,17 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
           </h2>
         </div>
 
-        <Link
-          href="/"
+        <button
+          type="button"
+          onClick={() => {
+            // Reset the entire analysis page, including pending requests and file inputs.
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+            window.location.assign("/?new=1");
+          }}
           className="mt-6 block rounded-xl bg-amber-400 px-4 py-3 text-center font-bold text-stone-950 transition hover:bg-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-200"
         >
           New analysis
-        </Link>
+        </button>
 
         <div className="mt-8">
           <div className="flex items-center justify-between gap-3">
@@ -292,7 +325,8 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
                 <Link
                   
                   href={`/dataset/${dataset.id}`}
-                  className="rounded-xl border border-transparent px-3 py-3 transition hover:border-sky-200 hover:bg-sky-50"
+                  onClick={() => setMobileOpen(false)}
+                  className="block rounded-xl border border-transparent py-3 pl-3 pr-16 transition hover:border-sky-200 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-400"
                 >
                   <p className="truncate font-bold text-stone-800" title={dataset.original_filename}>
                     {dataset.original_filename}
@@ -312,7 +346,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
                     disabled={deletingDatasetId !== null}
                     aria-label={`Delete ${dataset.original_filename}`}
                     title={`Delete ${dataset.original_filename}`}
-                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-lg text-stone-400 opacity-0 transition hover:bg-red-100 hover:text-red-600 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:cursor-wait disabled:opacity-50 group-hover:opacity-100"
+                    className="absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-lg text-stone-400 opacity-100 transition lg:opacity-0 hover:bg-red-100 hover:text-red-600 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:cursor-wait disabled:opacity-50 group-hover:opacity-100"
                   >
                     {deletingDatasetId === dataset.id ? (
                       <span
@@ -395,7 +429,8 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
                 >
                   <Link
                     href={`/dashboard/${dashboard.id}`}
-                    className="block rounded-xl py-3 pl-3 pr-12 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400"
+                    onClick={() => setMobileOpen(false)}
+                    className="block rounded-xl py-3 pl-3 pr-16 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-amber-400"
                   >
                   <p className="truncate font-bold text-stone-800">
                     {dashboard.name}
@@ -420,7 +455,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
                     disabled={deletingDashboardId !== null}
                     aria-label={`Delete ${dashboard.name}`}
                     title={`Delete ${dashboard.name}`}
-                    className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-lg text-stone-400 opacity-0 transition hover:bg-red-100 hover:text-red-600 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:cursor-wait disabled:opacity-50 group-hover:opacity-100"
+                    className="absolute right-2 top-2 grid h-11 w-11 place-items-center rounded-lg text-stone-400 opacity-100 transition lg:opacity-0 hover:bg-red-100 hover:text-red-600 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:cursor-wait disabled:opacity-50 group-hover:opacity-100"
                   >
                     {deletingDashboardId === dashboard.id ? (
                       <span

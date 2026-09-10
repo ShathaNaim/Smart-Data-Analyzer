@@ -15,6 +15,7 @@ from backend.models.dataset import Dataset
 from backend.models.dataset_transformation import DatasetTransformation
 from backend.services.dataset_profiler import json_safe_value
 from backend.services.object_storage import ObjectStorageError, download_object
+from backend.services.performance import measure_stage, timed_stage
 
 
 LEGACY_UPLOAD_FOLDER = "backend/uploads"
@@ -89,6 +90,7 @@ def evaluate_formula(df: pd.DataFrame, expression: str):
     return result
 
 
+@timed_stage("dataset_lookup")
 def get_owned_dataset(db: Session, dataset_id: uuid.UUID, owner_id: uuid.UUID) -> Dataset:
     statement = (
         select(Dataset)
@@ -105,21 +107,25 @@ def load_original_dataset(dataset: Dataset) -> pd.DataFrame:
     if os.path.basename(dataset.stored_filename) == dataset.stored_filename:
         legacy_path = os.path.join(LEGACY_UPLOAD_FOLDER, dataset.stored_filename)
         if os.path.isfile(legacy_path):
-            if dataset.extension == ".csv":
-                return pd.read_csv(legacy_path)
-            return pd.read_excel(legacy_path, engine="openpyxl")
+            with measure_stage("spreadsheet_parse_local"):
+                if dataset.extension == ".csv":
+                    return pd.read_csv(legacy_path)
+                return pd.read_excel(legacy_path, engine="openpyxl")
 
     try:
-        stream = BytesIO(download_object(dataset.stored_filename))
-        if dataset.extension == ".csv":
-            return pd.read_csv(stream)
-        return pd.read_excel(stream, engine="openpyxl")
+        with measure_stage("file_download"):
+            stream = BytesIO(download_object(dataset.stored_filename))
+        with measure_stage("spreadsheet_parse"):
+            if dataset.extension == ".csv":
+                return pd.read_csv(stream)
+            return pd.read_excel(stream, engine="openpyxl")
     except (ObjectStorageError, ValueError, OSError) as error:
         raise DatasetAccessError(
             "The stored dataset file could not be loaded."
         ) from error
 
 
+@timed_stage("transformations")
 def apply_transformations(
     df: pd.DataFrame, transformations: list[DatasetTransformation]
 ) -> pd.DataFrame:
@@ -127,9 +133,18 @@ def apply_transformations(
     for transformation in transformations:
         config = transformation.config
         kind = transformation.transformation_type
+        if kind == "remove_duplicates":
+            result = result.drop_duplicates(keep="first")
+            continue
         column = config["column_name"]
         if column not in result.columns:
             raise TransformationError(f"Column '{column}' no longer exists.")
+
+        if kind == "trim_whitespace":
+            strings = result[column].map(lambda value: isinstance(value, str))
+            if strings.any():
+                result.loc[strings, column] = result.loc[strings, column].map(str.strip)
+            continue
 
         if kind == "hide_column":
             result = result.drop(columns=[column])

@@ -138,6 +138,45 @@ def get_dataset_endpoint(
 
 
 @router.post(
+    "/{dataset_id}/transformations/preview",
+)
+def preview_transformation_endpoint(
+    dataset_id: uuid.UUID,
+    data: TransformationCreate,
+    db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+) -> dict:
+    try:
+        dataset = get_owned_dataset(db, dataset_id, owner_id)
+        before = load_working_dataset(dataset)
+        candidate = DatasetTransformation(
+            transformation_type=data.transformation_type, config=data.to_config()
+        )
+        after = apply_transformations(before, [candidate])
+        if data.transformation_type == "remove_duplicates":
+            changed = before.duplicated(keep="first")
+        elif data.transformation_type == "trim_whitespace":
+            changed = before[data.column_name].map(
+                lambda value: isinstance(value, str) and value != value.strip()
+            )
+        else:
+            raise TransformationError("Preview supports cleaning operations only.")
+        indices = before.index[changed][:5]
+        return {
+            "rows_before": len(before),
+            "rows_after": len(after),
+            "affected_rows": int(changed.sum()),
+            "revision": ",".join(str(item.id) for item in dataset.transformations),
+            "before": json_safe_records(before.loc[indices]),
+            "after": json_safe_records(after.loc[after.index.intersection(indices)]),
+        }
+    except DatasetAccessError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except TransformationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.post(
     "/{dataset_id}/transformations",
     response_model=TransformationResponse,
     status_code=status.HTTP_201_CREATED,
@@ -153,6 +192,10 @@ def create_transformation_endpoint(
         current_df = apply_transformations(
             load_original_dataset(dataset), dataset.transformations
         )
+        if data.expected_revision is not None and data.expected_revision != ",".join(
+            str(item.id) for item in dataset.transformations
+        ):
+            raise HTTPException(status_code=409, detail="The dataset changed. Preview the cleaning again.")
         candidate = DatasetTransformation(
             dataset_id=dataset.id,
             transformation_type=data.transformation_type,

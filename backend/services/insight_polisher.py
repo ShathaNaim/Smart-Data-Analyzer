@@ -8,6 +8,7 @@ import dotenv
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from backend.services.performance import timed_stage
 from backend.schemas.question import ChartSpec
 
 dotenv.load_dotenv()
@@ -89,6 +90,7 @@ def build_calculated_facts(chart: ChartSpec) -> dict[str, Any]:
     }
 
 
+@timed_stage("answer_polishing")
 def polish_chart_insight(
     *,
     question: str,

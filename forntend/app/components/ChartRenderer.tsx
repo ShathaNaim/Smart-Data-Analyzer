@@ -18,6 +18,14 @@ import {
   YAxis,
 } from "recharts";
 
+export type ChartText = {
+  title?: string | null;
+  subtitle?: string | null;
+  x_axis?: string | null;
+  y_axis?: string | null;
+  series?: Record<string, string>;
+};
+
 export type ChartSpec = {
   id: string;
 
@@ -26,6 +34,7 @@ export type ChartSpec = {
 
   title: string;
   subtitle?: string | null;
+  text?: ChartText | null;
 
   x_axis: {
     key: string;
@@ -61,9 +70,22 @@ const CHART_COLORS = [
 ];
 
 export default function ChartRenderer({
-  chart,
+  chart: sourceChart,
   colors = CHART_COLORS,
 }: ChartRendererProps) {
+  const chart = {
+    ...sourceChart,
+    title: sourceChart.text?.title ?? sourceChart.title,
+    subtitle: sourceChart.text?.subtitle ?? sourceChart.subtitle,
+    x_axis: { ...sourceChart.x_axis, label: sourceChart.text?.x_axis ?? sourceChart.x_axis.label },
+    series: sourceChart.series.map((series) => ({
+      ...series,
+      label: sourceChart.text?.series?.[series.key] ?? series.label,
+    })),
+  };
+  const yAxisLabel = chart.text?.y_axis
+    ? { value: chart.text.y_axis, angle: -90, position: "insideLeft" as const }
+    : undefined;
   const hasDenseXAxis = chart.data.length > 6;
   const cartesianChartWidth = Math.max(560, chart.data.length * 72);
 
@@ -101,7 +123,7 @@ export default function ChartRenderer({
             }}
           />
 
-          <YAxis />
+          <YAxis width={chart.text?.y_axis ? 85 : 60} label={yAxisLabel} />
           <Tooltip />
           <Legend verticalAlign="top" height={36} />
 
@@ -152,7 +174,7 @@ export default function ChartRenderer({
             }}
           />
 
-          <YAxis />
+          <YAxis width={chart.text?.y_axis ? 85 : 60} label={yAxisLabel} />
           <Tooltip />
           <Legend verticalAlign="top" height={36} />
 
@@ -205,7 +227,7 @@ export default function ChartRenderer({
             }}
           />
 
-          <YAxis />
+          <YAxis width={chart.text?.y_axis ? 85 : 60} label={yAxisLabel} />
           <Tooltip />
           <Legend verticalAlign="top" height={36} />
 

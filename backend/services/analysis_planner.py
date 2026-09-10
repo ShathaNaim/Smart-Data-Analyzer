@@ -5,6 +5,7 @@ import dotenv
 import pandas as pd
 from langchain_openai import ChatOpenAI
 
+from backend.services.performance import timed_stage
 from backend.schemas.question import (
     AnalysisDecision,
     ConversationMessage,
@@ -140,6 +141,7 @@ def format_conversation(
     ]
 
 
+@timed_stage("analysis_planning")
 def create_analysis_plan(
     df: pd.DataFrame,
     question: str,

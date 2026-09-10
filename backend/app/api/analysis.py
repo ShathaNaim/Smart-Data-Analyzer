@@ -1,7 +1,8 @@
 import uuid
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
+from backend.services.dataset_profiler import json_safe_value
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from backend.app.anonymous_identity import get_anonymous_owner_id
@@ -16,6 +17,7 @@ from backend.services.analysis_executor import (
     execute_analysis_plan,
 )
 from backend.services.ai_rate_limiter import enforce_ai_usage_limit
+from backend.services.ai_cache import get_cached_ai_result
 from backend.services.analysis_planner import create_analysis_plan
 from backend.services.insight_generator import generate_chart_insight
 from backend.services.insight_polisher import polish_chart_insight
@@ -24,12 +26,10 @@ from backend.services.kpi_executor import execute_kpi_plan
 from backend.schemas.semantic_profile import SemanticDatasetProfile
 from backend.services.semantic_profiler import (
     SemanticProfileError,
-    create_semantic_profile,
 )
 from backend.schemas.analysis_suggestion import AnalysisSuggestions
 from backend.services.analysis_suggester import (
     SuggestionGenerationError,
-    generate_analysis_suggestions,
 )
 from backend.schemas.suggestion_preview import (
     SuggestionPreviewRequest,
@@ -79,7 +79,10 @@ def get_summary(
             for column, dtype in df.dtypes.items()
         },
         "missing_values": df.isnull().sum().to_dict(),
-        "numeric_summary": df.describe().to_dict(),
+        "numeric_summary": {
+            str(column): {str(stat): json_safe_value(value) for stat, value in stats.items()}
+            for column, stats in df.describe().to_dict().items()
+        },
     }
 
 
@@ -89,9 +92,9 @@ def get_summary(
 )
 def get_semantic_profile(
     file_id: str,
+    response: Response,
     db: Session = Depends(get_db),
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
-    _ai_usage: None = Depends(enforce_ai_usage_limit),
 ) -> SemanticDatasetProfile:
     """
     Generate a validated semantic profile for an uploaded dataset.
@@ -99,13 +102,15 @@ def get_semantic_profile(
     This is a POST endpoint because it triggers an AI operation.
     """
 
-    df, dataset_description = load_owned_dataset(file_id, db, owner_id)
+    try:
+        dataset_id = uuid.UUID(file_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail="Dataset not found") from error
 
     try:
-        return create_semantic_profile(
-            df,
-            dataset_description=dataset_description,
-        )
+        return get_cached_ai_result(db, dataset_id, owner_id, response, "profile")
+    except (DatasetAccessError, TransformationError) as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     except SemanticProfileError as error:
         raise HTTPException(
             status_code=422,
@@ -146,9 +151,9 @@ def get_column_summary(
         minimum = column_data.min()
         maximum = column_data.max()
 
-        summary["mean"] = float(mean) if pd.notna(mean) else None
-        summary["min"] = float(minimum) if pd.notna(minimum) else None
-        summary["max"] = float(maximum) if pd.notna(maximum) else None
+        summary["mean"] = json_safe_value(mean)
+        summary["min"] = json_safe_value(minimum)
+        summary["max"] = json_safe_value(maximum)
 
     return summary
 
@@ -255,9 +260,9 @@ def ask_dataset(
 )
 def get_analysis_suggestions(
     file_id: str,
+    response: Response,
     db: Session = Depends(get_db),
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
-    _ai_usage: None = Depends(enforce_ai_usage_limit),
 ) -> AnalysisSuggestions:
     """
     Generate validated KPI and chart suggestions for an uploaded dataset.
@@ -265,13 +270,15 @@ def get_analysis_suggestions(
     This endpoint returns calculation plans, not calculated results.
     """
 
-    df, dataset_description = load_owned_dataset(file_id, db, owner_id)
+    try:
+        dataset_id = uuid.UUID(file_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail="Dataset not found") from error
 
     try:
-        return generate_analysis_suggestions(
-            df,
-            dataset_description=dataset_description,
-        )
+        return get_cached_ai_result(db, dataset_id, owner_id, response, "suggestions")
+    except (DatasetAccessError, TransformationError) as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
     except (
         SemanticProfileError,
         SuggestionGenerationError,

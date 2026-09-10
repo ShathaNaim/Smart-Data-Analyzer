@@ -14,6 +14,7 @@ from backend.services.object_storage import (
     upload_object,
 )
 from backend.config import get_settings
+from backend.services.dataset_transformer import json_safe_records
 
 router = APIRouter()
 
@@ -159,6 +160,6 @@ async def upload_file(
         "filename": file.filename,
         "rows": len(df),
         "columns": df.columns.tolist(),
-        "preview": df.head(5).to_dict(orient="records"),
+        "preview": json_safe_records(df.head(5)),
         "description": dataset.description,
     }

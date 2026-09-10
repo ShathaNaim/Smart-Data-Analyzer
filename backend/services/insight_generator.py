@@ -1,6 +1,8 @@
 
+from backend.services.performance import timed_stage
 from backend.schemas.question import ChartSpec
 
+@timed_stage("draft_insight")
 def generate_chart_insight(chart: ChartSpec) -> str:
     if not chart.data or not chart.series:
         return "The analysis completed, but no result was available."

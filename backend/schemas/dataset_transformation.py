@@ -8,16 +8,19 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TransformationCreate(BaseModel):
-    transformation_type: Literal["calculated_column", "rename_column", "hide_column"]
-    column_name: str = Field(min_length=1, max_length=255)
+    transformation_type: Literal["calculated_column", "rename_column", "hide_column", "trim_whitespace", "remove_duplicates"]
+    column_name: str | None = Field(default=None, min_length=1, max_length=255)
     new_column_name: str | None = Field(default=None, min_length=1, max_length=255)
     expression: str | None = Field(default=None, min_length=1, max_length=1_000)
     operator: Literal["add", "subtract", "multiply", "divide"] | None = None
     right_column: str | None = None
     right_value: float | None = None
+    expected_revision: str | None = None
 
     @model_validator(mode="after")
     def validate_configuration(self) -> "TransformationCreate":
+        if self.transformation_type != "remove_duplicates" and not self.column_name:
+            raise ValueError("Choose a column for this transformation.")
         if self.transformation_type == "calculated_column":
             if not self.new_column_name:
                 raise ValueError("Calculated columns require a name.")
@@ -32,7 +35,7 @@ class TransformationCreate(BaseModel):
         return self
 
     def to_config(self) -> dict:
-        return self.model_dump(exclude={"transformation_type"}, exclude_none=True)
+        return self.model_dump(exclude={"transformation_type", "expected_revision"}, exclude_none=True)
 
 
 class TransformationResponse(BaseModel):

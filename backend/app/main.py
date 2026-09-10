@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from backend.services.performance import PerformanceMiddleware
 from backend.app.api.upload import router as upload_router
 from backend.app.api.analysis import router as analysis_router
 from backend.app.api.dashboard import router as dashboard_router
@@ -9,6 +10,7 @@ from backend.app.api.dashboard_share import (
 )
 
 app = FastAPI()
+app.add_middleware(PerformanceMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

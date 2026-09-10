@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from backend.services.performance import timed_stage
 from backend.schemas.question import (
     AnalysisPlan,
     ChartAxis,
@@ -27,6 +28,7 @@ SUPPORTED_CHART_TYPES = {
 }
 
 
+@timed_stage("chart_calculation")
 def execute_analysis_plan(
     df: pd.DataFrame,
     plan: AnalysisPlan,
