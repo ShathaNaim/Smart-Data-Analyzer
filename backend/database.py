@@ -3,6 +3,7 @@ import os
 import dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from backend.services.database_performance import install_query_timing
 
 dotenv.load_dotenv()
 
@@ -21,6 +22,8 @@ SessionLocal = sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
+
+install_query_timing(engine)
 
 
 class Base(DeclarativeBase):

@@ -5,7 +5,7 @@ import dotenv
 import pandas as pd
 from langchain_openai import ChatOpenAI
 
-from backend.services.performance import timed_stage
+from backend.services.performance import logger, measure_stage, request_id, timed_stage
 from backend.schemas.question import (
     AnalysisDecision,
     ConversationMessage,
@@ -153,54 +153,67 @@ def create_analysis_plan(
     or a validated analysis plan.
     """
 
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0,
+    with measure_stage("planner_preparation"):
+        llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0,
+        )
+
+        structured_llm = llm.with_structured_output(
+            AnalysisDecision
+        )
+
+        metadata = build_dataset_metadata(df)
+
+        messages: list[dict[str, str]] = [
+            {
+                "role": "system",
+                "content": SYSTEM_PROMPT,
+            },
+            {
+                "role": "system",
+                "content": (
+                    "Dataset metadata:\n"
+                    + json.dumps(metadata, ensure_ascii=False)
+                ),
+            },
+            {
+                "role": "system",
+                "content": (
+                    "User-provided dataset context:\n"
+                    + json.dumps(
+                        {"description": dataset_description},
+                        ensure_ascii=False,
+                    )
+                ),
+            },
+        ]
+
+        if history:
+            messages.extend(format_conversation(history))
+
+        messages.append(
+            {
+                "role": "user",
+                "content": question,
+            }
+        )
+
+    logger.info(
+        "performance request_id=%s event=planner_input_size "
+        "columns=%d history_messages=%d metadata_chars=%d history_chars=%d "
+        "message_chars=%d schema_chars=%d",
+        request_id.get(), len(df.columns), len(history or []),
+        len(messages[1]["content"]),
+        sum(len(message.content) for message in (history or [])),
+        sum(len(message["content"]) for message in messages),
+        len(json.dumps(AnalysisDecision.model_json_schema())),
     )
+    with measure_stage("planner_ai_call"):
+        decision = structured_llm.invoke(messages)
 
-    structured_llm = llm.with_structured_output(
-        AnalysisDecision
-    )
+    with measure_stage("planner_validation"):
+        if isinstance(decision, AnalysisDecision):
+            return decision
 
-    metadata = build_dataset_metadata(df)
-
-    messages: list[dict[str, str]] = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT,
-        },
-        {
-            "role": "system",
-            "content": (
-                "Dataset metadata:\n"
-                + json.dumps(metadata, ensure_ascii=False)
-            ),
-        },
-        {
-            "role": "system",
-            "content": (
-                "User-provided dataset context:\n"
-                + json.dumps(
-                    {"description": dataset_description},
-                    ensure_ascii=False,
-                )
-            ),
-        },
-    ]
-
-    if history:
-        messages.extend(format_conversation(history))
-
-    messages.append(
-        {
-            "role": "user",
-            "content": question,
-        }
-    )
-
-    decision = structured_llm.invoke(messages)
-
-    if isinstance(decision, AnalysisDecision):
-        return decision
-
-    return AnalysisDecision.model_validate(decision)
+        return AnalysisDecision.model_validate(decision)

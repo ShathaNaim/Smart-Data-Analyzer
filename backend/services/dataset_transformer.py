@@ -16,6 +16,13 @@ from backend.models.dataset_transformation import DatasetTransformation
 from backend.services.dataset_profiler import json_safe_value
 from backend.services.object_storage import ObjectStorageError, download_object
 from backend.services.performance import measure_stage, timed_stage
+from backend.services.database_performance import measure_dataset_queries
+
+from backend.schemas.dataset_transformation import DatasetFilterCondition
+from backend.services.dataset_filter import (
+    DatasetFilterError,
+    apply_dataset_filters,
+)
 
 
 LEGACY_UPLOAD_FOLDER = "backend/uploads"
@@ -97,7 +104,10 @@ def get_owned_dataset(db: Session, dataset_id: uuid.UUID, owner_id: uuid.UUID) -
         .options(selectinload(Dataset.transformations))
         .where(Dataset.id == dataset_id, Dataset.owner_id == owner_id)
     )
-    dataset = db.scalar(statement)
+    with measure_stage("dataset_connection"):
+        db.connection()
+    with measure_dataset_queries():
+        dataset = db.scalar(statement)
     if dataset is None:
         raise DatasetAccessError("Dataset not found.")
     return dataset
@@ -133,8 +143,27 @@ def apply_transformations(
     for transformation in transformations:
         config = transformation.config
         kind = transformation.transformation_type
+        if kind == "filter_rows":
+            try:
+                conditions = [
+                    DatasetFilterCondition.model_validate(item)
+                    for item in config.get("filters", [])
+                ]
+                result = apply_dataset_filters(result, conditions)
+            except (DatasetFilterError, ValueError) as error:
+                raise TransformationError(str(error)) from error
+
+            continue
         if kind == "remove_duplicates":
             result = result.drop_duplicates(keep="first")
+            continue
+        if kind == "hide_column":
+            columns = config.get("column_names") or [config.get("column_name")]
+            if any(column not in result.columns for column in columns):
+                raise TransformationError("A selected column no longer exists.")
+            if len(set(columns)) >= len(result.columns):
+                raise TransformationError("Keep at least one column in the dataset.")
+            result = result.drop(columns=columns)
             continue
         column = config["column_name"]
         if column not in result.columns:
@@ -146,9 +175,6 @@ def apply_transformations(
                 result.loc[strings, column] = result.loc[strings, column].map(str.strip)
             continue
 
-        if kind == "hide_column":
-            result = result.drop(columns=[column])
-            continue
 
         target = config["new_column_name"].strip()
         if not target:

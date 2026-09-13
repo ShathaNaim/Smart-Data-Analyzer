@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AppSidebar from "../../components/AppSidebar";
+import RemoveColumnsPanel from "../../components/RemoveColumnsPanel";
 import DataValue from "../../components/DataValue";
 import { apiUrl } from "../../lib/api";
+import DatasetFilterPanel from "../../components/DatasetFilterPanel";
 
 type Transformation = {
   id: string;
-  transformation_type: "calculated_column" | "rename_column" | "hide_column" | "trim_whitespace" | "remove_duplicates";
-  config: Record<string, string | number>;
+  transformation_type: "calculated_column" | "rename_column" | "hide_column" | "trim_whitespace" | "remove_duplicates" | "filter_rows";
+  config: Record<string, string | number | string[] | { column_name: string; operator: string; value?: unknown }[]>;
   created_at: string;
 };
 
@@ -45,10 +47,14 @@ function formatBytes(bytes: number) {
 
 function describeTransformation(item: Transformation) {
   const config = item.config;
+  if (item.transformation_type === "filter_rows") {
+    const filters = Array.isArray(config.filters) ? config.filters : [];
+    return `Filter: ${filters.map((filter) => typeof filter === "object" ? `${filter.column_name} ${filter.operator} ${JSON.stringify(filter.value ?? "")}` : filter).join(" AND ")}`;
+  }
   if (item.transformation_type === "trim_whitespace") return `Trim whitespace in ${config.column_name}`;
   if (item.transformation_type === "remove_duplicates") return "Remove exact duplicate rows (keep first)";
   if (item.transformation_type === "hide_column") {
-    return `Hide ${config.column_name}`;
+    return `Remove ${Array.isArray(config.column_names) ? config.column_names.join(", ") : config.column_name}`;
   }
   if (item.transformation_type === "rename_column") {
     return `Rename ${config.column_name} to ${config.new_column_name}`;
@@ -84,7 +90,7 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
       const detail = data as DatasetDetail;
       setDataset(detail);
       setPage(detail.page);
-      setColumnName((current) => current || detail.columns[0] || "");
+      setColumnName((current) => detail.columns.includes(current) ? current : detail.columns[0] || "");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load this dataset.");
     } finally {
@@ -229,19 +235,32 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
                 </section>
 
                 <aside className="space-y-6">
+                  <DatasetFilterPanel
+                    key={`${dataset.id}:${dataset.transformations.map((item) => item.id).join(",")}`}
+                    disabled={saving || loading}
+                    onBusyChange={setSaving}
+                    datasetId={datasetId}
+                    columns={dataset.columns}
+                    onApplied={() => loadDataset(1)}
+                  />
                   <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
                     <h2 className="font-black">Transform data</h2>
                     <div className="mt-4 grid grid-cols-3 rounded-xl bg-stone-100 p-1 text-xs font-bold">
                       {(["calculate", "rename", "hide"] as const).map((item) => (
-                        <button key={item} onClick={() => setMode(item)} className={`rounded-lg px-2 py-2 capitalize ${mode === item ? "bg-white text-amber-700 shadow-sm" : "text-stone-500"}`}>{item}</button>
+                        <button key={item} disabled={saving} onClick={() => setMode(item)} className={`rounded-lg px-2 py-2 capitalize ${mode === item ? "bg-white text-amber-700 shadow-sm" : "text-stone-500"}`}>{item === "hide" ? "Remove" : item}</button>
                       ))}
                     </div>
+                    {mode === "hide" ? (
+                      <RemoveColumnsPanel key={`${dataset.id}:${dataset.transformations.map((item) => item.id).join(",")}`}
+                        datasetId={datasetId} columns={dataset.columns} busy={saving || loading}
+                        setBusy={setSaving} onApplied={() => loadDataset(1)} />
+                    ) : (<>
                     <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-stone-500">Source column</label>
                     <select value={columnName} onChange={(event) => setColumnName(event.target.value)} className="mt-1 w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5">
                       {dataset.columns.map((column) => <option key={column}>{column}</option>)}
                     </select>
 
-                    {mode !== "hide" && (
+                    {(
                       <>
                         <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-stone-500">{mode === "rename" ? "New name" : "Calculated column name"}</label>
                         <input value={newColumnName} onChange={(event) => setNewColumnName(event.target.value)} placeholder={mode === "rename" ? "New column name" : "e.g. profit"} className="mt-1 w-full rounded-xl border border-stone-300 px-3 py-2.5" />
@@ -276,9 +295,10 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
                         </div>
                       </>
                     )}
-                    <button onClick={() => void saveTransformation()} disabled={saving || (mode !== "hide" && !newColumnName.trim()) || (mode === "calculate" && !expression.trim())} className="mt-5 w-full rounded-xl bg-amber-400 px-4 py-3 font-black transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50">
-                      {saving ? "Saving..." : mode === "hide" ? "Hide column" : "Apply change"}
+                    <button onClick={() => void saveTransformation()} disabled={saving || !newColumnName.trim() || (mode === "calculate" && !expression.trim())} className="mt-5 w-full rounded-xl bg-amber-400 px-4 py-3 font-black transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50">
+                      {saving ? "Saving..." : "Apply change"}
                     </button>
+                    </>)}
                   </section>
 
                   <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">

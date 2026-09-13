@@ -25,7 +25,29 @@ Legacy local uploads use spreadsheet_parse_local, which includes local file I/O.
 AI cache requests also report ai_cache_lookup and, on a miss, ai_cache_lock_wait,
 semantic_profile_generation and suggestion_generation as applicable.
 
+Within dataset_lookup, dataset_connection measures obtaining the session's
+connection, including pool waiting, new connection setup and health checks when
+needed. It can be nearly zero when the session already holds a connection.
+dataset_query_execute reports each SQL cursor execution, including driver/network
+time, without SQL or parameters. It is not a server-only query measurement.
+dataset_query_processing is the remaining time around the ORM operation after
+subtracting cursor execution: SQL compilation, remaining result fetching, ORM
+object construction and timing/logging overhead. It is not pure Python CPU time.
+The dataset and saved transformations can require separate queries. These stages
+are parts of dataset_lookup; do not add them to that parent total. No database
+data or schema changes are required for this instrumentation.
+
 AI-related stages measure the whole service operation, including prompt
+preparation and validation. Inside analysis_planning, planner_preparation measures
+client setup, metadata construction and message assembly; planner_ai_call measures
+the structured invocation (including any SDK retries and output parsing); and
+planner_validation measures final application validation. These are nested
+timings, so do not add them to analysis_planning. The planner_input_size event
+reports character counts and column/history counts, never their contents.
+Character counts are not token counts or exact wire payload sizes; schema_chars
+measures the local output schema, which the SDK may transform before sending.
+
+Other AI-related stages include prompt
 preparation and validation, not only network time. Polishing can return its
 existing fallback: outcome=ok means the service returned, not that the AI
 provider necessarily succeeded. Cache hits omit download and generation stages.

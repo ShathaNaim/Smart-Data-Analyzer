@@ -153,6 +153,36 @@ def preview_transformation_endpoint(
             transformation_type=data.transformation_type, config=data.to_config()
         )
         after = apply_transformations(before, [candidate])
+        if data.transformation_type == "filter_rows":
+            excluded = before.loc[
+                ~before.index.isin(after.index)
+            ]
+
+            return {
+                "rows_before": len(before),
+                "rows_after": len(after),
+                "affected_rows": len(excluded),
+                "revision": ",".join(
+                    str(item.id)
+                    for item in dataset.transformations
+                ),
+                "before": json_safe_records(before.head(5)),
+                "after": json_safe_records(after.head(5)),
+                "excluded_preview": json_safe_records(
+                    excluded.head(5)
+                ),
+                "can_apply": len(after) > 0,
+            }
+        if data.transformation_type == "hide_column":
+            return {
+                "rows_before": len(before), "rows_after": len(after),
+                "columns_before": before.columns.tolist(),
+                "columns_after": after.columns.tolist(),
+                "removed_columns": [column for column in before.columns if column not in after.columns],
+                "revision": ",".join(str(item.id) for item in dataset.transformations),
+                "before": json_safe_records(before.head(5)),
+                "after": json_safe_records(after.head(5)),
+            }
         if data.transformation_type == "remove_duplicates":
             changed = before.duplicated(keep="first")
         elif data.transformation_type == "trim_whitespace":
@@ -160,7 +190,7 @@ def preview_transformation_endpoint(
                 lambda value: isinstance(value, str) and value != value.strip()
             )
         else:
-            raise TransformationError("Preview supports cleaning operations only.")
+            raise TransformationError("Preview supports cleaning and column removal only.")
         indices = before.index[changed][:5]
         return {
             "rows_before": len(before),
@@ -187,7 +217,18 @@ def create_transformation_endpoint(
     db: Session = Depends(get_db),
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
 ) -> TransformationResponse:
+    requires_preview = (
+        data.column_names is not None
+        or data.transformation_type == "filter_rows"
+    )
+
+    if requires_preview and data.expected_revision is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Preview this change before applying it.",
+        )
     try:
+        db.execute(select(Dataset.id).where(Dataset.id == dataset_id, Dataset.owner_id == owner_id).with_for_update())
         dataset = get_owned_dataset(db, dataset_id, owner_id)
         current_df = apply_transformations(
             load_original_dataset(dataset), dataset.transformations
@@ -195,13 +236,22 @@ def create_transformation_endpoint(
         if data.expected_revision is not None and data.expected_revision != ",".join(
             str(item.id) for item in dataset.transformations
         ):
-            raise HTTPException(status_code=409, detail="The dataset changed. Preview the cleaning again.")
+            raise HTTPException(status_code=409, detail="The dataset changed. Preview the change again.")
         candidate = DatasetTransformation(
             dataset_id=dataset.id,
             transformation_type=data.transformation_type,
             config=data.to_config(),
         )
-        apply_transformations(current_df, [candidate])
+        updated_df = apply_transformations(current_df, [candidate])
+
+        if (
+            data.transformation_type == "filter_rows"
+            and updated_df.empty
+        ):
+            raise TransformationError(
+                "This filter would exclude every record. "
+                "Adjust the conditions to keep at least one record."
+            )
     except DatasetAccessError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except TransformationError as error:
@@ -228,6 +278,7 @@ def undo_transformation_endpoint(
     owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
 ) -> None:
     try:
+        db.execute(select(Dataset.id).where(Dataset.id == dataset_id, Dataset.owner_id == owner_id).with_for_update())
         dataset = get_owned_dataset(db, dataset_id, owner_id)
     except DatasetAccessError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
