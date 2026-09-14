@@ -107,7 +107,10 @@ type SavedDashboard = {
   items: SavedDashboardItem[];
 };
 
-const MAX_UPLOAD_SIZE_MB = 25;
+const configuredUploadLimit = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ?? 25);
+const MAX_UPLOAD_SIZE_MB = Number.isFinite(configuredUploadLimit) && configuredUploadLimit > 0
+  ? configuredUploadLimit
+  : 25;
 const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 const SUPPORTED_UPLOAD_EXTENSIONS = [".csv", ".xlsx"];
 

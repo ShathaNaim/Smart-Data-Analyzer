@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     max_dataset_rows: int = Field(default=250_000, ge=1)
     max_dataset_columns: int = Field(default=200, ge=1)
 
+    # JSON array of exact browser origins; never use '*' with credentials.
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+
     ai_requests_per_minute: int = Field(default=5, ge=1)
     ai_requests_per_day: int = Field(default=30, ge=1)
     ai_concurrent_requests: int = Field(default=1, ge=1)

@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: smart-data-analyzer-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Free services have no pre-deploy command. Apply migrations before serving.
+    startCommand: alembic upgrade head && uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: R2_ENDPOINT_URL
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        sync: false
+      - key: ANONYMOUS_COOKIE_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: CORS_ORIGINS
+        value: '[]'
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "3"
+      - key: MAX_DATASET_ROWS
+        value: "10000"
+      - key: MAX_DATASET_COLUMNS
+        value: "50"
+      - key: AI_REQUESTS_PER_MINUTE
+        value: "5"
+      - key: AI_REQUESTS_PER_DAY
+        value: "30"
+      - key: AI_CONCURRENT_REQUESTS
+        value: "1"

@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from backend.config import get_settings
 from backend.services.performance import PerformanceMiddleware
 from backend.app.api.upload import router as upload_router
 from backend.app.api.analysis import router as analysis_router
@@ -14,7 +15,7 @@ app.add_middleware(PerformanceMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=get_settings().cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,3 +31,9 @@ app.include_router(dataset_router)
 @app.get("/")
 def home():
     return {"message": "Smart Data Analyzer API"}
+
+
+@app.get("/healthz")
+def health_check():
+    # Liveness only: do not wake Neon or call paid AI services for health probes.
+    return {"status": "ok"}
