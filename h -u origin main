@@ -1,0 +1,216 @@
+[1mdiff --git a/.env.example b/.env.example[m
+[1mindex 2bd8ad1..cc97ed3 100644[m
+[1m--- a/.env.example[m
+[1m+++ b/.env.example[m
+[36m@@ -4,6 +4,9 @@[m [mDATABASE_URL=postgresql+psycopg://user:password@host/database[m
+ ANONYMOUS_COOKIE_SECRET=replace-with-at-least-32-random-characters[m
+ # Set to true when the API is served over HTTPS.[m
+ COOKIE_SECURE=false[m
+[32m+[m[32m# Exact frontend origins as a JSON array.[m
+[32m+[m[32mCORS_ORIGINS=["http://localhost:3000"][m
+[32m+[m[32mOPENAI_API_KEY=replace-with-your-api-key[m
+ R2_ACCOUNT_ID=your-cloudflare-account-id[m
+ R2_ACCESS_KEY_ID=your-r2-access-key-id[m
+ R2_SECRET_ACCESS_KEY=your-r2-secret-access-key[m
+[36m@@ -18,4 +21,4 @@[m [mMAX_DATASET_COLUMNS=200[m
+ # Demo-only in-memory AI usage limits[m
+ AI_REQUESTS_PER_MINUTE=5[m
+ AI_REQUESTS_PER_DAY=30[m
+[31m-AI_CONCURRENT_REQUESTS=1[m
+\ No newline at end of file[m
+[32m+[m[32mAI_CONCURRENT_REQUESTS=1[m
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex fcade6b..fbfd75d 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -2,4 +2,8 @@[m
+ __pycache__/[m
+ *.py[cod][m
+ .env[m
+[32m+[m[32m.env.*[m
+[32m+[m[32m!.env.example[m
+[32m+[m[32mvenv/[m
+[32m+[m[32m.venv/[m
+ backend/uploads/[m
+[1mdiff --git a/.python-version b/.python-version[m
+[1mnew file mode 100644[m
+[1mindex 0000000..49547fd[m
+[1m--- /dev/null[m
+[1m+++ b/.python-version[m
+[36m@@ -0,0 +1 @@[m
+[32m+[m[32m3.14.1[m
+[1mdiff --git a/backend/app/main.py b/backend/app/main.py[m
+[1mindex 2d5b62f..7454ecd 100644[m
+[1m--- a/backend/app/main.py[m
+[1m+++ b/backend/app/main.py[m
+[36m@@ -1,4 +1,5 @@[m
+ from fastapi import FastAPI[m
+[32m+[m[32mfrom backend.config import get_settings[m
+ from backend.services.performance import PerformanceMiddleware[m
+ from backend.app.api.upload import router as upload_router[m
+ from backend.app.api.analysis import router as analysis_router[m
+[36m@@ -14,7 +15,7 @@[m [mapp.add_middleware(PerformanceMiddleware)[m
+ [m
+ app.add_middleware([m
+     CORSMiddleware,[m
+[31m-    allow_origins=["http://localhost:3000"],[m
+[32m+[m[32m    allow_origins=get_settings().cors_origins,[m
+     allow_credentials=True,[m
+     allow_methods=["*"],[m
+     allow_headers=["*"],[m
+[36m@@ -30,3 +31,9 @@[m [mapp.include_router(dataset_router)[m
+ @app.get("/")[m
+ def home():[m
+     return {"message": "Smart Data Analyzer API"}[m
+[32m+[m
+[32m+[m
+[32m+[m[32m@app.get("/healthz")[m
+[32m+[m[32mdef health_check():[m
+[32m+[m[32m    # Liveness only: do not wake Neon or call paid AI services for health probes.[m
+[32m+[m[32m    return {"status": "ok"}[m
+[1mdiff --git a/backend/config.py b/backend/config.py[m
+[1mindex 971662b..114a642 100644[m
+[1m--- a/backend/config.py[m
+[1m+++ b/backend/config.py[m
+[36m@@ -18,6 +18,9 @@[m [mclass Settings(BaseSettings):[m
+     max_dataset_rows: int = Field(default=250_000, ge=1)[m
+     max_dataset_columns: int = Field(default=200, ge=1)[m
+ [m
+[32m+[m[32m    # JSON array of exact browser origins; never use '*' with credentials.[m
+[32m+[m[32m    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])[m
+[32m+[m
+     ai_requests_per_minute: int = Field(default=5, ge=1)[m
+     ai_requests_per_day: int = Field(default=30, ge=1)[m
+     ai_concurrent_requests: int = Field(default=1, ge=1)[m
+[36m@@ -33,4 +36,4 @@[m [mclass Settings(BaseSettings):[m
+ def get_settings() -> Settings:[m
+     """Create the settings object once and reuse it."""[m
+ [m
+[31m-    return Settings()[m
+\ No newline at end of file[m
+[32m+[m[32m    return Settings()[m
+[1mdiff --git a/backend/tests/test_deployment.py b/backend/tests/test_deployment.py[m
+[1mnew file mode 100644[m
+[1mindex 0000000..635510d[m
+[1m--- /dev/null[m
+[1m+++ b/backend/tests/test_deployment.py[m
+[36m@@ -0,0 +1,27 @@[m
+[32m+[m[32mimport unittest[m
+[32m+[m[32mfrom unittest.mock import patch[m
+[32m+[m
+[32m+[m[32mfrom fastapi.testclient import TestClient[m
+[32m+[m
+[32m+[m[32mfrom backend.app.main import app[m
+[32m+[m[32mfrom backend.config import Settings[m
+[32m+[m
+[32m+[m
+[32m+[m[32mclass DeploymentTests(unittest.TestCase):[m
+[32m+[m[32m    def test_health_check_does_not_need_database_or_owner_cookie(self):[m
+[32m+[m[32m        with patch("backend.app.anonymous_identity._cookie_secret", side_effect=AssertionError):[m
+[32m+[m[32m            with TestClient(app) as client:[m
+[32m+[m[32m                response = client.get("/healthz")[m
+[32m+[m[32m        self.assertEqual(response.status_code, 200)[m
+[32m+[m[32m        self.assertEqual(response.json(), {"status": "ok"})[m
+[32m+[m[32m        self.assertNotIn("set-cookie", response.headers)[m
+[32m+[m
+[32m+[m[32m    def test_production_cors_origins_are_loaded_from_json(self):[m
+[32m+[m[32m        with patch.dict("os.environ", {"CORS_ORIGINS": '["https://portfolio.example"]'}):[m
+[32m+[m[32m            settings = Settings(_env_file=None)[m
+[32m+[m[32m        self.assertEqual(settings.cors_origins, ["https://portfolio.example"])[m
+[32m+[m
+[32m+[m[32m    def test_proxy_deployment_can_disable_cross_origin_access(self):[m
+[32m+[m[32m        with patch.dict("os.environ", {"CORS_ORIGINS": "[]"}):[m
+[32m+[m[32m            settings = Settings(_env_file=None)[m
+[32m+[m[32m        self.assertEqual(settings.cors_origins, [])[m
+[1mdiff --git a/forntend/.env.example b/forntend/.env.example[m
+[1mindex 600de8d..c8d09b0 100644[m
+[1m--- a/forntend/.env.example[m
+[1m+++ b/forntend/.env.example[m
+[36m@@ -1 +1,6 @@[m
+ NEXT_PUBLIC_API_URL=http://localhost:8000[m
+[32m+[m
+[32m+[m[32m# Hosted frontend: replace the setting above with NEXT_PUBLIC_API_URL=/api[m
+[32m+[m[32m# and set the backend origin below before building. Redeploy after changes.[m
+[32m+[m[32m# BACKEND_URL=https://your-backend.onrender.com[m
+[32m+[m[32m# NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB=3[m
+[1mdiff --git a/forntend/app/page.tsx b/forntend/app/page.tsx[m
+[1mindex 307cf25..37945d3 100644[m
+[1m--- a/forntend/app/page.tsx[m
+[1m+++ b/forntend/app/page.tsx[m
+[36m@@ -107,7 +107,10 @@[m [mtype SavedDashboard = {[m
+   items: SavedDashboardItem[];[m
+ };[m
+ [m
+[31m-const MAX_UPLOAD_SIZE_MB = 25;[m
+[32m+[m[32mconst configuredUploadLimit = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_SIZE_MB ?? 25);[m
+[32m+[m[32mconst MAX_UPLOAD_SIZE_MB = Number.isFinite(configuredUploadLimit) && configuredUploadLimit > 0[m
+[32m+[m[32m  ? configuredUploadLimit[m
+[32m+[m[32m  : 25;[m
+ const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;[m
+ const SUPPORTED_UPLOAD_EXTENSIONS = [".csv", ".xlsx"];[m
+ [m
+[1mdiff --git a/forntend/next.config.ts b/forntend/next.config.ts[m
+[1mindex e9ffa30..1cc644f 100644[m
+[1m--- a/forntend/next.config.ts[m
+[1m+++ b/forntend/next.config.ts[m
+[36m@@ -1,7 +1,13 @@[m
+ import type { NextConfig } from "next";[m
+ [m
+ const nextConfig: NextConfig = {[m
+[31m-  /* config options here */[m
+[32m+[m[32m  async rewrites() {[m
+[32m+[m[32m    const backendUrl = process.env.BACKEND_URL?.replace(/\/+$/, "");[m
+[32m+[m[32m    if (!backendUrl) return [];[m
+[32m+[m
+[32m+[m[32m    // Keep the anonymous ownership cookie first-party on the frontend domain.[m
+[32m+[m[32m    return [{ source: "/api/:path*", destination: `${backendUrl}/:path*` }];[m
+[32m+[m[32m  },[m
+ };[m
+ [m
+ export default nextConfig;[m
+[1mdiff --git a/render.yaml b/render.yaml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..dcbab98[m
+[1m--- /dev/null[m
+[1m+++ b/render.yaml[m
+[36m@@ -0,0 +1,40 @@[m
+[32m+[m[32mservices:[m
+[32m+[m[32m  - type: web[m
+[32m+[m[32m    name: smart-data-analyzer-api[m
+[32m+[m[32m    runtime: python[m
+[32m+[m[32m    plan: free[m
+[32m+[m[32m    buildCommand: pip install -r requirements.txt[m
+[32m+[m[32m    # Free services have no pre-deploy command. Apply migrations before serving.[m
+[32m+[m[32m    startCommand: alembic upgrade head && uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT --workers 1[m
+[32m+[m[32m    healthCheckPath: /healthz[m
+[32m+[m[32m    envVars:[m
+[32m+[m[32m      - key: DATABASE_URL[m
+[32m+[m[32m        sync: false[m
+[32m+[m[32m      - key: OPENAI_API_KEY[m
+[32m+[m[32m        sync: false[m
+[32m+[m[32m      - key: R2_ENDPOINT_URL[m
+[32m+[m[32m        sync: false[m
+[32m+[m[32m      - key: R2_ACCESS_KEY_ID[m
+[32m+[m[32m        sync: false[m
+[32m+[m[32m      - key: R2_SECRET_ACCESS_KEY[m
+[32m+[m[32m        sync: false[m
+[32m+[m[32m      - key: R2_BUCKET_NAME[m
+[32m+[m[32m        sync: false[m
+[32m+[m[32m      - key: ANONYMOUS_COOKIE_SECRET[m
+[32m+[m[32m        generateValue: true[m
+[32m+[m[32m      - key: COOKIE_SECURE[m
+[32m+[m[32m        value: "true"[m
+[32m+[m[32m      - key: CORS_ORIGINS[m
+[32m+[m[32m        value: '[]'[m
+[32m+[m[32m      - key: MAX_UPLOAD_SIZE_MB[m
+[32m+[m[32m        value: "3"[m
+[32m+[m[32m      - key: MAX_DATASET_ROWS[m
+[32m+[m[32m        value: "10000"[m
+[32m+[m[32m      - key: MAX_DATASET_COLUMNS[m
+[32m+[m[32m        value: "50"[m
+[32m+[m[32m      - key: AI_REQUESTS_PER_MINUTE[m
+[32m+[m[32m        value: "5"[m
+[32m+[m[32m      - key: AI_REQUESTS_PER_DAY[m
+[32m+[m[32m        value: "30"[m
+[32m+[m[32m      - key: AI_CONCURRENT_REQUESTS[m
+[32m+[m[32m        value: "1"[m

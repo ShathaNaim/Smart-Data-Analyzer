@@ -1,3 +1,4 @@
+from backend.services.chart_guidance import CHART_GUIDANCE
 import json
 from typing import Any
 
@@ -49,13 +50,13 @@ Clarification rules:
 - Never invent column names.
 
 Chart-selection rules:
-- You may only select line, bar, area, or pie.
+- Select only chart types from the supported chart capabilities below.
 - Use line charts for values grouped by a real date or time period.
 - Use bar charts for comparisons across discrete categories or numeric groups,
   including employee tenure in years.
 - Use area charts for volume trends over time when appropriate.
 - Use pie charts only for one measure across a small number of categories.
-- Do not select scatter or table because they are not supported yet.
+- Do not select table because it is not supported.
 KPI rules:
 - A KPI must produce exactly one numeric value.
 - Select exactly one measure.
@@ -73,8 +74,8 @@ Analysis rules:
 - Use aliases that are short and safe.
 - Every analysis plan must contain exactly one dimension.
 - The dimension is the column used to group values on the X-axis.
-- When the user asks for "X vs Y", use X as the dimension and Y as the measure.
-- When Y is numeric, use mean unless the user requests another aggregation.
+- For numeric relationships, use scatter as described below.
+- For categorical X vs numeric Y, use X as dimension and aggregate Y; use mean unless another calculation is requested.
 - Do not request more than five measures.
 - Keep row_limit at or below 1000.
 - Mention important assumptions in the plan's intent.
@@ -86,6 +87,8 @@ Response rules:
 - When status is "ready", set question to null, set options to an empty list,
   and provide a complete plan.
 """
+
+SYSTEM_PROMPT += "\n" + CHART_GUIDANCE
 
 
 def build_dataset_metadata(df: pd.DataFrame) -> dict[str, Any]:

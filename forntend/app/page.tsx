@@ -9,8 +9,10 @@ import KpiCard, {
   type KpiSpec,
 } from "./components/KpiCard";
 import AppSidebar from "./components/AppSidebar";
+import AccountControls from "./components/AccountControls";
 import DataCleaningPanel from "./components/DataCleaningPanel";
 import DataValue from "./components/DataValue";
+import ManualChartBuilder from "./components/ManualChartBuilder";
 import { apiUrl } from "./lib/api";
 
 import type {
@@ -834,6 +836,7 @@ const handleColumnClick = async (column: string) => {
     <div className="min-h-screen bg-amber-50 lg:flex">
       <AppSidebar />
       <main className="relative min-h-screen min-w-0 flex-1 overflow-hidden bg-amber-50 px-5 py-10 text-stone-900 sm:px-8 sm:py-16">
+      <AccountControls />
       <section className="relative mx-auto flex w-full max-w-3xl flex-col">
         {!result && <header className="mb-8 text-center">
           <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-300 bg-yellow-100 px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm">
@@ -1167,6 +1170,16 @@ const handleColumnClick = async (column: string) => {
             </div>
           )}
         </div>
+
+        {result && <ManualChartBuilder
+          key={result.file_id}
+          datasetId={result.file_id}
+          columns={result.columns}
+          disabled={loading}
+          saving={addingItemId !== null}
+          saveError={dashboardError}
+          onAdd={(chart) => handleAddToDashboard({ type: "chart", spec: chart })}
+        />}
 
         {result && <div className="contents">
           <div className="order-5 mt-8 rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-8">

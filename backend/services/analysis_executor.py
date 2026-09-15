@@ -21,6 +21,8 @@ class AnalysisExecutionError(ValueError):
 
 
 SUPPORTED_CHART_TYPES = {
+    "scatter",
+    "histogram",
     "line",
     "bar",
     "area",
@@ -57,6 +59,9 @@ def execute_analysis_plan(
         raise AnalysisExecutionError(
             "No rows remain after applying the requested filters."
         )
+
+    if plan.chart_type in {"scatter", "histogram"}:
+        return execute_numeric_chart(working_df, plan)
 
     working_df, dimension_columns = prepare_dimensions(
         working_df,
@@ -158,6 +163,14 @@ def validate_plan_columns(
             "The first chart version requires exactly one dimension."
         )
 
+    if plan.chart_type in {"scatter", "histogram"}:
+        numeric_columns = {dimension.column for dimension in plan.dimensions} | {measure.column for measure in plan.measures}
+        for name in numeric_columns:
+            if not pd.api.types.is_numeric_dtype(df[name]) or pd.api.types.is_bool_dtype(df[name]):
+                raise AnalysisExecutionError(f"{plan.chart_type.title()} requires numeric columns; '{name}' is not numeric.")
+        if plan.chart_type == "scatter" and plan.dimensions[0].column == plan.measures[0].column:
+            raise AnalysisExecutionError("Choose two different numeric columns for a scatter plot.")
+
     for measure in plan.measures:
         series = df[measure.column]
 
@@ -170,6 +183,51 @@ def validate_plan_columns(
                 f"Aggregation '{measure.aggregation}' requires a numeric "
                 f"column, but '{measure.column}' is not numeric."
             )
+
+
+def execute_numeric_chart(df: pd.DataFrame, plan: AnalysisPlan) -> ChartSpec:
+    dimension = plan.dimensions[0]
+    source_columns = [dimension.column] + [measure.column for measure in plan.measures]
+    values = df[source_columns].replace([np.inf, -np.inf], np.nan).dropna()
+    if values.empty:
+        raise AnalysisExecutionError("No finite numeric observations remain for this chart.")
+    if plan.chart_type == "scatter":
+        if len(values) < 2 or any(values[column].nunique() < 2 for column in source_columns):
+            raise AnalysisExecutionError("Scatter plots require at least two valid pairs and variation in both columns.")
+        # A reproducible sample avoids displaying only the beginning of a large dataset.
+        if len(values) > plan.row_limit:
+            values = values.sample(n=plan.row_limit, random_state=0)
+        measure = plan.measures[0]
+        result = pd.DataFrame({dimension.alias: values[dimension.column], measure.alias: values[measure.column]})
+        series = ChartSeries(key=measure.alias, label=measure.column, format="number")
+        axis_type = "number"
+        subtitle = f"Individual observations of {measure.column} against {dimension.column}; no aggregation."
+    else:
+        try:
+            counts, edges = np.histogram(values[dimension.column].to_numpy(dtype=float), bins=plan.bin_count or min(10, plan.row_limit))
+        except (ValueError, OverflowError, IndexError) as error:
+            raise AnalysisExecutionError("The numeric range cannot be divided into bins. Try fewer bins or rescale the values.") from error
+        if not np.isfinite(edges).all() or not np.all(np.diff(edges) > 0):
+            raise AnalysisExecutionError("The numeric range cannot be divided into valid bins. Try fewer bins or rescale the values.")
+        count_key = "count" if dimension.alias != "count" else "frequency"
+        edge_labels = [f"{edge:.6g}" for edge in edges]
+        if len(set(edge_labels)) != len(edge_labels):
+            edge_labels = [f"{edge:.17g}" for edge in edges]
+        rows = []
+        for index, count in enumerate(counts):
+            closing = "]" if index == len(counts) - 1 else ")"
+            rows.append({dimension.alias: f"[{edge_labels[index]}, {edge_labels[index + 1]}{closing}", count_key: int(count)})
+        result = pd.DataFrame(rows)
+        series = ChartSeries(key=count_key, label="Count", format="integer")
+        axis_type = "category"
+        subtitle = "Frequency in equal-width bins; lower bounds included, upper bounds excluded except in the final bin."
+    return ChartSpec(
+        id=build_chart_id(plan), type=plan.chart_type,
+        title=(f"Distribution of {dimension.column}" if plan.chart_type == "histogram" else f"{plan.measures[0].column} vs {dimension.column}")[:300],
+        subtitle=subtitle[:500],
+        x_axis=ChartAxis(key=dimension.alias, label=dimension.column[:200], value_type=axis_type),
+        series=[series], data=dataframe_to_chart_rows(result),
+    )
 
 
 def apply_filters(

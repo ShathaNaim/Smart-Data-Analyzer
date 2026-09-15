@@ -26,6 +26,9 @@ Write one to three short sentences in plain language. Lead with the most useful
 finding, add a meaningful comparison or trend when the supplied facts support
 one, and mention a supplied warning only when it materially affects the result.
 Never claim that one variable caused another. Do not use Markdown or headings.
+For scatter plots, do not infer a correlation, trend, or relationship strength
+from extrema or first/last displayed observations; no correlation was calculated.
+For histograms, values are bin frequencies, not measurements or time trends.
 """
 
 

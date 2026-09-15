@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.dashboard_share import (
     router as dashboard_share_router,
 )
-
+from backend.app.api.auth import router as auth_router
 app = FastAPI()
 app.add_middleware(PerformanceMiddleware)
 
@@ -27,6 +27,7 @@ app.include_router(analysis_router)
 app.include_router(dashboard_router)
 app.include_router(dashboard_share_router)
 app.include_router(dataset_router)
+app.include_router(auth_router)
 
 @app.get("/")
 def home():

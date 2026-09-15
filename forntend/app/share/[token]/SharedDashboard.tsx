@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import ChartRenderer from "../../components/ChartRenderer";
 import KpiCard from "../../components/KpiCard";
 import { apiUrl } from "../../lib/api";
+import { createPiePalette } from "../../lib/chartColors";
 import type {
   SharedDashboard as SharedDashboardData,
 } from "../../types/sharedDashboard";
@@ -49,7 +50,7 @@ const getChartColors = (
   ) ?? FALLBACK_CHART_COLORS;
 
   return item.chart_spec?.type === "pie"
-    ? [seriesColors[0], ...FALLBACK_CHART_COLORS.slice(1)]
+    ? createPiePalette(seriesColors[0], item.chart_spec.data.length)
     : seriesColors;
 };
 

@@ -28,6 +28,7 @@ export type FilterCondition = {
 export type MeasureSpec = {
   column: string;
   aggregation:
+    | "none"
     | "sum"
     | "mean"
     | "median"
@@ -79,7 +80,8 @@ export type ChartAnalysisPlan = {
   filters: FilterCondition[];
   sort: SortSpec[];
   row_limit: number;
-  chart_type: "line" | "bar" | "area" | "pie";
+  chart_type: "line" | "bar" | "area" | "pie" | "scatter" | "histogram";
+  bin_count?: number | null;
   assumptions: string[];
 };
 

@@ -11,6 +11,11 @@ def generate_chart_insight(chart: ChartSpec) -> str:
     series = chart.series[0]
     measure_key = series.key
 
+    if chart.type == "scatter":
+        return f"The scatter plot displays {len(chart.data):,} paired observations of {chart.x_axis.label} and {series.label}. No correlation statistic or causal effect has been calculated."
+    if chart.type == "histogram":
+        return f"The histogram groups {sum(int(row[measure_key]) for row in chart.data):,} observations into {len(chart.data)} equal-width bins."
+
     numeric_rows = [
         row
         for row in chart.data

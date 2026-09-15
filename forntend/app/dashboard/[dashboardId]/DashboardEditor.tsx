@@ -10,6 +10,7 @@ import KpiCard, {
   type KpiSpec,
 } from "../../components/KpiCard";
 import { apiUrl } from "../../lib/api";
+import { createPiePalette } from "../../lib/chartColors";
 import ChartTextEditor from "../../components/ChartTextEditor";
 import type { ChartText } from "../../components/ChartRenderer";
 
@@ -61,10 +62,9 @@ const getChartColors = (item: DashboardItem): string[] => {
     FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length],
   ) ?? FALLBACK_CHART_COLORS;
 
-  // A pie has one numeric series but many category slices. Keep a full
-  // palette so each slice receives a different color.
+  // A pie's color control sets the palette for all category slices.
   return item.chart_spec?.type === "pie"
-    ? [seriesColors[0], ...FALLBACK_CHART_COLORS.slice(1)]
+    ? createPiePalette(seriesColors[0], item.chart_spec.data.length)
     : seriesColors;
 };
 
@@ -678,6 +678,7 @@ function RightArrowIcon() {
                       Chart type
                       <select
                         value={item.chart_spec.type}
+                        disabled={item.chart_spec.type === "scatter" || item.chart_spec.type === "histogram"}
                         onChange={(event) =>
                           changeChartType(
                             item.id,
@@ -689,10 +690,13 @@ function RightArrowIcon() {
                         <option value="bar">Bar</option>
                         <option value="line">Line</option>
                         <option value="area">Area</option>
+                        {item.chart_spec.type === "scatter" && <option value="scatter">Scatter</option>}
+                        {item.chart_spec.type === "histogram" && <option value="histogram">Histogram</option>}
                         {item.chart_spec.series.length === 1 && (
                           <option value="pie">Pie</option>
                         )}
                       </select>
+                      {(item.chart_spec.type === "scatter" || item.chart_spec.type === "histogram") && <span className="mt-1 block max-w-60 text-xs font-normal normal-case">Create a new chart to change how these observations are calculated.</span>}
                     </label>
 
                     {item.chart_spec.series.map((series, seriesIndex) => (
@@ -700,7 +704,7 @@ function RightArrowIcon() {
                         key={series.key}
                         className="text-xs font-bold uppercase tracking-wide text-stone-600"
                       >
-                        {series.label} color
+                        {item.chart_spec?.type === "pie" ? "Slice palette color" : `${series.label} color`}
                         <input
                           type="color"
                           value={getChartColors(item)[seriesIndex]}

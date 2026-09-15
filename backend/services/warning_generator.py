@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import numpy as np
 
 from backend.services.performance import timed_stage
 from backend.schemas.question import AnalysisPlan, ChartSpec
@@ -52,6 +53,19 @@ def generate_analysis_warnings(
                 f"Column '{dimension.column}' contains {invalid_dates:,} "
                 "values that could not be interpreted as dates and were excluded."
             )
+
+    if plan.chart_type in {"scatter", "histogram"}:
+        valid = filtered_df[list(analyzed_columns)].replace([np.inf, -np.inf], np.nan).dropna()
+        excluded = len(filtered_df) - len(valid)
+        if excluded:
+            warnings.append(f"{excluded:,} rows with missing or infinite chart values were excluded.")
+        if plan.chart_type == "scatter":
+            if len(valid) > len(chart.data):
+                warnings.append(f"Showing a reproducible random sample of {len(chart.data):,} of {len(valid):,} valid observations.")
+            warnings.append("A relationship between variables does not establish causation.")
+        else:
+            warnings.append(f"All {len(valid):,} valid observations are counted across {len(chart.data)} equal-width bins. Bin size affects the visible distribution.")
+        return warnings[:10]
 
     prepared_df, dimension_columns = prepare_dimensions(filtered_df, plan)
     group_count = int(

@@ -130,6 +130,7 @@ class MeasureSpec(StrictSchema):
     column: str = Field(min_length=1, max_length=200)
 
     aggregation: Literal[
+        "none",
         "sum",
         "mean",
         "median",
@@ -169,7 +170,7 @@ class ChartAnalysisPlan(StrictSchema):
     )
 
     measures: list[MeasureSpec] = Field(
-        min_length=1,
+        min_length=0,
         max_length=5,
     )
 
@@ -190,6 +191,8 @@ class ChartAnalysisPlan(StrictSchema):
     )
 
     chart_type: Literal[
+        "scatter",
+        "histogram",
         "line",
         "bar",
         "area",
@@ -201,10 +204,35 @@ class ChartAnalysisPlan(StrictSchema):
         max_length=10,
     )
 
+    bin_count: int | None = Field(default=None, ge=2, le=50)
+
     @model_validator(mode="after")
     def validate_chart_requirements(
         self,
     ) -> "ChartAnalysisPlan":
+        if self.chart_type in {"scatter", "histogram"}:
+            if self.dimensions[0].time_granularity is not None or self.sort:
+                raise ValueError("Scatter and histogram charts do not support date grouping or sorting.")
+        if self.chart_type == "histogram":
+            if self.row_limit < 2:
+                raise ValueError("Histograms require room for at least two bins.")
+            if self.measures:
+                raise ValueError("Histograms require one numeric dimension and no measures.")
+            if self.bin_count is not None and self.bin_count > self.row_limit:
+                raise ValueError("Histogram bin count must not exceed row_limit.")
+        else:
+            if self.bin_count is not None:
+                raise ValueError("Only histograms support bin_count.")
+            if not self.measures:
+                raise ValueError("This chart requires a measure.")
+            if self.chart_type == "scatter":
+                if self.row_limit < 2:
+                    raise ValueError("Scatter plots require a point limit of at least two.")
+                if len(self.measures) != 1 or self.measures[0].aggregation != "none":
+                    raise ValueError("Scatter requires one unaggregated measure (aggregation: none).")
+            elif any(measure.aggregation == "none" for measure in self.measures):
+                raise ValueError("Grouped charts require an aggregation.")
+
         if len(self.dimensions) != 1:
             raise ValueError(
                 "The current chart implementation requires exactly one "
@@ -279,6 +307,8 @@ class KpiAnalysisPlan(StrictSchema):
     def validate_kpi_format(
         self,
     ) -> "KpiAnalysisPlan":
+        if self.measure.aggregation == "none":
+            raise ValueError("KPI calculations require an aggregation.")
         if self.format == "currency" and self.currency is None:
             raise ValueError(
                 "A currency KPI must include a currency code."
@@ -375,6 +405,7 @@ class ChartSpec(StrictSchema):
     id: str = Field(min_length=1, max_length=100)
 
     type: Literal[
+        "histogram",
         "line",
         "bar",
         "area",

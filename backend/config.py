@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     ai_requests_per_minute: int = Field(default=5, ge=1)
     ai_requests_per_day: int = Field(default=30, ge=1)
     ai_concurrent_requests: int = Field(default=1, ge=1)
+    auth_allowed_origins: list[str] = Field(
+    default_factory=lambda: [
+        "http://localhost:3000",
+        "http://localhost:8000",
+    ]
+)
 
     @property
     def max_upload_size_bytes(self) -> int:

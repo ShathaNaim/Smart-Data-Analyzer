@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from backend.services.chart_guidance import CHART_GUIDANCE
+
 import json
 import re
 
@@ -64,7 +66,7 @@ KPI rules:
 Chart rules:
 - Chart suggestions must contain a complete ChartAnalysisPlan.
 - Every chart must contain exactly one dimension.
-- Use between one and five measures.
+- Use one to five measures for grouped charts; follow the special scatter and histogram rules below.
 - Use bar charts for comparisons across categories.
 - Use line charts for trends over a real date or time dimension.
 - Use area charts only for suitable volume trends over time.
@@ -81,6 +83,8 @@ Quality rules:
 - Do not suggest a KPI or chart when its meaning would be misleading.
 - Include important uncertainty in the plan assumptions and response warnings.
 """
+
+SYSTEM_PROMPT += "\n" + CHART_GUIDANCE
 
 
 class SuggestionGenerationError(ValueError):
