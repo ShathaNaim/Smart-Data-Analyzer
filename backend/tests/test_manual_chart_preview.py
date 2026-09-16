@@ -31,7 +31,7 @@ class ManualChartPreviewTests(unittest.TestCase):
             return preview_analysis_suggestion("dataset", request, Mock(), uuid.uuid4())
 
     def test_all_chart_types_aggregate_sort_and_limit(self):
-        for chart_type in ("bar", "line", "area", "pie"):
+        for chart_type in ("bar", "line", "area", "pie", "donut", "horizontal_bar"):
             with self.subTest(chart_type=chart_type):
                 response = self.preview(chart_type)
                 self.assertEqual(response.chart.type, chart_type)

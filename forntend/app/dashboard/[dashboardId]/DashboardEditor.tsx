@@ -43,7 +43,7 @@ type DashboardEditorProps = {
   dashboardId: string;
 };
 
-type EditableChartType = "bar" | "line" | "area" | "pie";
+type EditableChartType = "bar" | "line" | "area" | "pie" | "scatter" | "histogram" | "donut" | "horizontal_bar";
 
 const FALLBACK_CHART_COLORS = [
   "#f59e0b",
@@ -62,8 +62,8 @@ const getChartColors = (item: DashboardItem): string[] => {
     FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length],
   ) ?? FALLBACK_CHART_COLORS;
 
-  // A pie's color control sets the palette for all category slices.
-  return item.chart_spec?.type === "pie"
+  // Pie and doughnut color controls set the palette for all category slices.
+  return item.chart_spec?.type === "pie" || item.chart_spec?.type === "donut"
     ? createPiePalette(seriesColors[0], item.chart_spec.data.length)
     : seriesColors;
 };
@@ -690,10 +690,16 @@ function RightArrowIcon() {
                         <option value="bar">Bar</option>
                         <option value="line">Line</option>
                         <option value="area">Area</option>
+                        <option value="horizontal_bar">Horizontal bar</option>
                         {item.chart_spec.type === "scatter" && <option value="scatter">Scatter</option>}
                         {item.chart_spec.type === "histogram" && <option value="histogram">Histogram</option>}
-                        {item.chart_spec.series.length === 1 && (
+                        {item.chart_spec.series.length === 1 &&
+                          item.chart_spec.data.every((row) => Number(row[item.chart_spec!.series[0].key]) >= 0) &&
+                          item.chart_spec.data.some((row) => Number(row[item.chart_spec!.series[0].key]) > 0) && (
+                          <>
                           <option value="pie">Pie</option>
+                          <option value="donut">Doughnut</option>
+                          </>
                         )}
                       </select>
                       {(item.chart_spec.type === "scatter" || item.chart_spec.type === "histogram") && <span className="mt-1 block max-w-60 text-xs font-normal normal-case">Create a new chart to change how these observations are calculated.</span>}
@@ -704,7 +710,7 @@ function RightArrowIcon() {
                         key={series.key}
                         className="text-xs font-bold uppercase tracking-wide text-stone-600"
                       >
-                        {item.chart_spec?.type === "pie" ? "Slice palette color" : `${series.label} color`}
+                        {item.chart_spec?.type === "pie" || item.chart_spec?.type === "donut" ? "Slice palette color" : `${series.label} color`}
                         <input
                           type="color"
                           value={getChartColors(item)[seriesIndex]}

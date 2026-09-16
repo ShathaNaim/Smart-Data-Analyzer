@@ -27,6 +27,8 @@ SUPPORTED_CHART_TYPES = {
     "bar",
     "area",
     "pie",
+    "donut",
+    "horizontal_bar",
 }
 
 

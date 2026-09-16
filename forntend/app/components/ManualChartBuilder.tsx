@@ -30,6 +30,7 @@ export default function ManualChartBuilder({ datasetId, columns, disabled, savin
   const [limit, setLimit] = useState("20");
   const [bins, setBins] = useState("10");
   const advanced = type === "scatter" || type === "histogram";
+  const isPartOfWhole = type === "pie" || type === "donut";
   const [title, setTitle] = useState("");
   const [preview, setPreview] = useState<ChartSpec | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -86,8 +87,8 @@ export default function ManualChartBuilder({ datasetId, columns, disabled, savin
       if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "These settings could not produce a chart. Check the selected columns and calculation.");
       const result = data as SuggestionPreviewResponse;
       if (result.output_type !== "chart" || !result.chart) throw new Error("The preview did not return a chart.");
-      if (type === "pie" && (result.chart.data.some((row) => Number(row[valueAlias]) < 0) || !result.chart.data.some((row) => Number(row[valueAlias]) > 0))) {
-        throw new Error("Pie charts need non-negative values and at least one positive value. Try a bar chart for this calculation.");
+      if (isPartOfWhole && (result.chart.data.some((row) => Number(row[valueAlias]) < 0) || !result.chart.data.some((row) => Number(row[valueAlias]) > 0))) {
+        throw new Error("Pie and doughnut charts need non-negative values and at least one positive value. Try a bar chart for this calculation.");
       }
       const chart = result.chart;
       setPreview({
@@ -120,6 +121,8 @@ export default function ManualChartBuilder({ datasetId, columns, disabled, savin
           <fieldset disabled={loading || disabled || saving} className="grid gap-4 text-sm font-semibold text-stone-700 disabled:opacity-60">
             <label>Chart title (optional)<input className={inputClass} maxLength={255} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="e.g. Orders by region" /></label>
             <label>Chart type<select className={inputClass} value={type} onChange={(event) => { setType(event.target.value as ChartSpec["type"]); setLimit(event.target.value === "scatter" ? "1000" : "20"); }}>
+              <option value="donut">Doughnut — show parts of a whole</option>
+              <option value="horizontal_bar">Horizontal bar — compare categories with long names</option>
               <option value="bar">Bar — compare categories</option><option value="line">Line — show trends</option><option value="area">Area — show volume trends</option><option value="pie">Pie — show parts of a whole</option><option value="scatter">Scatter — explore relationships</option><option value="histogram">Histogram — show distribution</option>
             </select></label>
             <label>{advanced ? (type === "scatter" ? "X-axis numeric column" : "Numeric column") : "Category / date column"}<select className={inputClass} value={dimension} onChange={(event) => { setDimension(event.target.value); setGranularity(null); }} required>{columns.map((column) => <option key={column}>{column}</option>)}</select></label>
@@ -134,7 +137,7 @@ export default function ManualChartBuilder({ datasetId, columns, disabled, savin
             {type !== "histogram" && <label>{type === "scatter" ? "Maximum points" : "Maximum categories"}<input className={inputClass} type="number" min={type === "scatter" ? 2 : 1} max={1000} step={1} required value={limit} onChange={(event) => setLimit(event.target.value)} /></label>}
             {type === "histogram" && <label>Number of bins<input className={inputClass} type="number" min={2} max={50} step={1} required value={bins} onChange={(event) => setBins(event.target.value)} /></label>}
             {advanced && <p className="text-xs font-normal text-stone-600">{type === "scatter" ? "Select two different numeric columns. Each point is one observation; large datasets are sampled." : "All valid numeric values are counted in equal-width bins. Missing and infinite values are excluded."}</p>}
-            {type === "pie" && <p className="text-xs font-normal text-stone-600">Pie charts work best with a few categories. The chart shows only the categories within your limit.</p>}
+            {isPartOfWhole && <p className="text-xs font-normal text-stone-600">Pie and doughnut charts work best with a few categories. The chart shows only the categories within your limit.</p>}
             <button className={buttonClass} type="submit">{loading ? "Calculating preview…" : "Update preview"}</button>
           </fieldset>
         </form>

@@ -8,6 +8,10 @@ Supported chart capabilities and selection rules:
 - line: trends over real dates; one time dimension and aggregated measures.
 - area: additive volume over real dates; avoid implying unrelated totals.
 - pie: composition, one non-negative aggregated measure and few categories.
+- donut: composition, one non-negative aggregated measure and few categories;
+  require at least one positive value. Use when a doughnut chart is requested.
+- horizontal_bar: categorical comparisons, especially with long category names;
+  one dimension and 1-5 aggregated measures.
 - scatter: explore a relationship between TWO DIFFERENT numeric, non-boolean,
   non-identifier columns with variation and sufficient paired observations.
   The dimension is raw X, one measure is raw Y with aggregation="none".

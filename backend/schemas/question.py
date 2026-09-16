@@ -197,6 +197,8 @@ class ChartAnalysisPlan(StrictSchema):
         "bar",
         "area",
         "pie",
+        "donut",
+        "horizontal_bar",
     ]
 
     assumptions: list[str] = Field(
@@ -239,9 +241,9 @@ class ChartAnalysisPlan(StrictSchema):
                 "dimension."
             )
 
-        if self.chart_type == "pie" and len(self.measures) != 1:
+        if self.chart_type in {"pie", "donut"} and len(self.measures) != 1:
             raise ValueError(
-                "A pie chart requires exactly one measure."
+                "Pie and doughnut charts require exactly one measure."
             )
 
         return self
@@ -405,12 +407,14 @@ class ChartSpec(StrictSchema):
     id: str = Field(min_length=1, max_length=100)
 
     type: Literal[
+        "scatter",
         "histogram",
         "line",
         "bar",
         "area",
         "pie",
-        "scatter",
+        "donut",
+        "horizontal_bar",
     ]
 
     title: str = Field(min_length=1, max_length=300)

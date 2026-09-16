@@ -32,7 +32,7 @@ export type ChartSpec = {
   id: string;
 
   // Support every chart type returned by the backend.
-  type: "bar" | "line" | "area" | "pie" | "scatter" | "histogram";
+  type: "bar" | "line" | "area" | "pie" | "scatter" | "histogram" | "donut" | "horizontal_bar";
 
   title: string;
   subtitle?: string | null;
@@ -327,6 +327,7 @@ export default function ChartRenderer({
       );
       break;
 
+    case "donut":
     case "pie": {
       // The backend requires pie charts to have
       // exactly one numeric series.
@@ -342,6 +343,7 @@ export default function ChartRenderer({
             cx="50%"
             cy="50%"
             outerRadius="70%"
+            innerRadius={chart.type === "donut" ? "45%" : 0}
             stroke="#ffffff"
             strokeWidth={2}
             label
@@ -368,6 +370,62 @@ export default function ChartRenderer({
       );
       break;
     }
+    case "horizontal_bar":
+      renderedChart = (
+        <BarChart
+          data={chart.data}
+          layout="vertical"
+          margin={{ top: 10, right: 20, bottom: 30, left: 10 }}
+        >
+          <CartesianGrid
+            stroke="#e7e5e4"
+            strokeDasharray="3 3"
+            horizontal={false}
+          />
+
+          <XAxis
+            type="number"
+            tick={AXIS_TICK}
+            label={
+              chart.text?.y_axis
+                ? {
+                    value: chart.text.y_axis,
+                    position: "insideBottom",
+                    offset: -15,
+                  }
+                : undefined
+            }
+          />
+
+          <YAxis
+            type="category"
+            dataKey={chart.x_axis.key}
+            width={120}
+            label={{ value: chart.x_axis.label, angle: -90, position: "insideLeft" }}
+            tick={AXIS_TICK}
+            tickFormatter={formatAxisLabel}
+            interval={0}
+          />
+
+          <Tooltip contentStyle={TOOLTIP_STYLE} />
+
+          <Legend
+            verticalAlign="top"
+            iconType="circle"
+            wrapperStyle={LEGEND_STYLE}
+          />
+
+          {chart.series.map((series, index) => (
+            <Bar
+              key={series.key}
+              dataKey={series.key}
+              name={series.label}
+              fill={colors[index % colors.length]}
+            />
+          ))}
+        </BarChart>
+      );
+      break;
 
     default:
       renderedChart = (

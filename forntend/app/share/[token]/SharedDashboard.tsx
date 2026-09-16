@@ -49,7 +49,7 @@ const getChartColors = (
     FALLBACK_CHART_COLORS[index % FALLBACK_CHART_COLORS.length],
   ) ?? FALLBACK_CHART_COLORS;
 
-  return item.chart_spec?.type === "pie"
+  return item.chart_spec?.type === "pie" || item.chart_spec?.type === "donut"
     ? createPiePalette(seriesColors[0], item.chart_spec.data.length)
     : seriesColors;
 };

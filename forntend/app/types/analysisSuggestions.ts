@@ -80,7 +80,7 @@ export type ChartAnalysisPlan = {
   filters: FilterCondition[];
   sort: SortSpec[];
   row_limit: number;
-  chart_type: "line" | "bar" | "area" | "pie" | "scatter" | "histogram";
+  chart_type: ChartSpec["type"];
   bin_count?: number | null;
   assumptions: string[];
 };

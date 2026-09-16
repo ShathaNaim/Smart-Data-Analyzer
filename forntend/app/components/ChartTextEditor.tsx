@@ -26,9 +26,9 @@ export default function ChartTextEditor({ chart, disabled, onChange }: {
       <fieldset disabled={disabled} className="mt-3 grid gap-3 sm:grid-cols-2">
         {field("Chart title", text.title ?? chart.title, 255, (title) => onChange({ ...text, title }))}
         {field("Subtitle", text.subtitle ?? chart.subtitle ?? "", 500, (subtitle) => onChange({ ...text, subtitle }))}
-        {chart.type !== "pie" && <>
-          {field("X-axis title", text.x_axis ?? chart.x_axis.label, 200, (x_axis) => onChange({ ...text, x_axis }))}
-          {field("Y-axis title", text.y_axis ?? "", 200, (y_axis) => onChange({ ...text, y_axis }))}
+        {chart.type !== "pie" && chart.type !== "donut" && <>
+          {field(chart.type === "horizontal_bar" ? "Y-axis title" : "X-axis title", text.x_axis ?? chart.x_axis.label, 200, (x_axis) => onChange({ ...text, x_axis }))}
+          {field(chart.type === "horizontal_bar" ? "X-axis title" : "Y-axis title", text.y_axis ?? "", 200, (y_axis) => onChange({ ...text, y_axis }))}
           {chart.series.map((series) => (
             <div key={series.key}>
               {field(`Legend: ${series.label}`, text.series?.[series.key] ?? series.label, 200,
