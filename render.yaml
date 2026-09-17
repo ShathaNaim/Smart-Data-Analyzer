@@ -37,6 +37,6 @@ services:
       - key: AI_CONCURRENT_REQUESTS
         value: "1"
       - key: CORS_ORIGINS
-        value: '["https://smart-data-analyzer-c4w0peghd-shathanaims-projects.vercel.app"]'
+        value: '["https://smart-data-analyzer-eight.vercel.app"]'
       - key: AUTH_ALLOWED_ORIGINS
-        value: '["https://smart-data-analyzer-c4w0peghd-shathanaims-projects.vercel.app"]'
+        value: '["https://smart-data-analyzer-eight.vercel.app"]'
