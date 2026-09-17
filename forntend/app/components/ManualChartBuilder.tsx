@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ChartRenderer, { type ChartSpec } from "./ChartRenderer";
-import { apiUrl } from "../lib/api";
+import { apiUrl, workspaceFetch } from "../lib/api";
 import type { ChartAnalysisPlan, DimensionSpec, MeasureSpec, SuggestionPreviewResponse } from "../types/analysisSuggestions";
 
 const inputClass = "mt-1 block w-full rounded-lg border border-stone-300 bg-white px-3 py-2 font-normal focus:outline-none focus:ring-2 focus:ring-amber-400";
@@ -78,7 +78,7 @@ export default function ManualChartBuilder({ datasetId, columns, disabled, savin
     request.current = controller;
     setLoading(true);
     try {
-      const response = await fetch(apiUrl(`/dataset/${datasetId}/suggestion-preview`), {
+      const response = await workspaceFetch(apiUrl(`/dataset/${datasetId}/suggestion-preview`), {
         method: "POST", credentials: "include", signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ output_type: "chart", chart_plan: plan, kpi_plan: null }),

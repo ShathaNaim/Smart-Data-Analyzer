@@ -26,6 +26,8 @@ services:
         value: "true"
       - key: CORS_ORIGINS
         value: '[]'
+      - key: AUTH_ALLOWED_ORIGINS
+        sync: false
       - key: MAX_UPLOAD_SIZE_MB
         value: "3"
       - key: MAX_DATASET_ROWS

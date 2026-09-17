@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import { apiUrl } from "../lib/api";
+import { apiUrl, workspaceFetch } from "../lib/api";
 
 
 type DashboardSummary = {
@@ -67,7 +67,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
       setDatasetsError(null);
 
       try {
-        const response = await fetch(
+        const response = await workspaceFetch(
           apiUrl("/datasets?limit=5"),
           {
             signal: controller.signal,
@@ -111,7 +111,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
       setError(null);
 
       try {
-        const response = await fetch(
+        const response = await workspaceFetch(
           apiUrl(`/dashboards?limit=50${datasetId ? `&dataset_id=${encodeURIComponent(datasetId)}` : ""}`),
           {
             signal: controller.signal,
@@ -165,7 +165,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
     setError(null);
 
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/dashboards/${dashboard.id}`),
         {
           method: "DELETE",
@@ -206,7 +206,7 @@ export default function AppSidebar({ datasetId }: { datasetId?: string }) {
     setDatasetsError(null);
 
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/datasets/${dataset.id}`),
         {
           method: "DELETE",

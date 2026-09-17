@@ -1,5 +1,6 @@
 import type { ChartSpec } from "../components/ChartRenderer";
 import type { KpiSpec } from "../components/KpiCard";
+import type { DashboardTheme } from "../lib/dashboardThemes";
 
 
 export type SharedDashboardItem = {
@@ -17,6 +18,7 @@ export type SharedDashboardItem = {
 
 export type SharedDashboard = {
   name: string;
+  theme: DashboardTheme;
   items: SharedDashboardItem[];
   updated_at: string;
 };

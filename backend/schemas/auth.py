@@ -33,3 +33,6 @@ class AuthResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+class GuestWorkspaceTransferRequest(BaseModel):
+    expected_account_id: uuid.UUID

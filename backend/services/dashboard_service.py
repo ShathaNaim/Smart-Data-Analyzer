@@ -40,6 +40,7 @@ def create_dashboard(
     dashboard = Dashboard(
         dataset_id=data.dataset_id,
         name=data.name,
+        theme=data.theme,
         owner_id=owner_id,
     )
 
@@ -125,6 +126,9 @@ def save_dashboard(
         saved_items.append(item)
 
     dashboard.name = data.name
+    if data.theme is not None:
+        dashboard.theme = data.theme
+
     dashboard.items = saved_items
     dashboard.updated_at = datetime.now(timezone.utc)
 

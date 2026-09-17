@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { apiUrl } from "../lib/api";
+import { apiUrl, workspaceFetch } from "../lib/api";
 
 type FilterPreview = {
   rows_before: number;
@@ -38,7 +38,7 @@ export default function DatasetFilterPanel({
     setError(null);
     setPreview(null);
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/datasets/${datasetId}/transformations/preview`),
         {
           method: "POST",
@@ -71,7 +71,7 @@ export default function DatasetFilterPanel({
     onBusyChange?.(true);
     setError(null);
     try {
-      const response = await fetch(apiUrl(`/datasets/${datasetId}/transformations`), {
+      const response = await workspaceFetch(apiUrl(`/datasets/${datasetId}/transformations`), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

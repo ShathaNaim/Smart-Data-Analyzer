@@ -5,11 +5,14 @@ from typing import Literal
 
 from pydantic import Field
 
-from backend.schemas.dashboard import DashboardSchema
+from backend.schemas.dashboard import DashboardSchema, DashboardTheme
 from backend.schemas.question import ChartSpec, KpiSpec
 
 
 class DashboardShareCreate(DashboardSchema):
+    theme: DashboardTheme = Field(
+        default="orange",
+    )
     expires_in_days: Literal[7, 30] | None = Field(
         default=None,
         description=(
@@ -62,6 +65,7 @@ class SharedDashboardResponse(DashboardSchema):
     """
 
     name: str
+    theme: DashboardTheme
 
     items: list[SharedDashboardItemResponse] = Field(
         default_factory=list,

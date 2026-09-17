@@ -6,6 +6,7 @@ import ChartRenderer from "../../components/ChartRenderer";
 import KpiCard from "../../components/KpiCard";
 import { apiUrl } from "../../lib/api";
 import { createPiePalette } from "../../lib/chartColors";
+import { dashboardThemeStyle } from "../../lib/dashboardThemes";
 import type {
   SharedDashboard as SharedDashboardData,
 } from "../../types/sharedDashboard";
@@ -179,10 +180,13 @@ export default function SharedDashboard({
     );
 
   return (
-    <main className="min-h-screen bg-amber-50 px-5 py-8 text-stone-900 sm:px-8">
+    <main
+      style={dashboardThemeStyle(dashboard.theme)}
+      className="min-h-screen bg-dashboard-background px-5 py-8 text-stone-900 sm:px-8"
+    >
       <section className="mx-auto max-w-6xl">
-        <header className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
-          <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-widest text-amber-800">
+        <header className="rounded-2xl border border-dashboard-border bg-white p-5 shadow-sm">
+          <span className="inline-flex rounded-full bg-dashboard-soft px-3 py-1 text-xs font-bold uppercase tracking-widest text-dashboard-accent">
             Shared dashboard · View only
           </span>
 
@@ -235,7 +239,7 @@ export default function SharedDashboard({
                     className={`${
                       CHART_WIDTH_CLASSES[item.width] ??
                       CHART_WIDTH_CLASSES[6]
-                    } rounded-2xl border border-amber-200 bg-white p-4 shadow-sm`}
+                    } rounded-2xl border border-dashboard-border bg-white p-4 shadow-sm`}
                   >
                     {item.chart_spec && (
                       <ChartRenderer

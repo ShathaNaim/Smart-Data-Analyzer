@@ -34,8 +34,8 @@ function formatKpiValue(kpi: KpiSpec): string {
 
 export default function KpiCard({ kpi }: KpiCardProps) {
   return (
-    <article className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-widest text-amber-700">
+    <article className="rounded-2xl border border-dashboard-border bg-white p-5 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-widest text-dashboard-accent">
         KPI
       </p>
       <h3 className="mt-2 text-sm font-bold text-stone-600">

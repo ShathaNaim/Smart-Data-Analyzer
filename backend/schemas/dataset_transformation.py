@@ -18,12 +18,15 @@ class DatasetFilterCondition(BaseModel):
         "lte",
         "contains",
         "in",
+        "one_of",
+        "none_of",
         "between",
         "is_null",
         "is_not_null",
     ]
 
     value: str | int | float | bool | list[str | int | float | bool] | None = None
+    include_missing: bool = False
 
     @model_validator(mode="after")
     def validate_filter_value(self) -> "DatasetFilterCondition":
@@ -37,7 +40,10 @@ class DatasetFilterCondition(BaseModel):
         if self.value is None:
             raise ValueError("This filter requires a value.")
 
-        if self.operator == "in":
+        if self.operator in ("one_of", "none_of"):
+            if not isinstance(self.value, list):
+                raise ValueError("Value selection requires a list.")
+        elif self.operator == "in":
             if not isinstance(self.value, list) or not self.value:
                 raise ValueError(
                     "'in' requires a non-empty list of values."

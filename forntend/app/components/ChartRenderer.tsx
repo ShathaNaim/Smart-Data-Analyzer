@@ -437,7 +437,7 @@ export default function ChartRenderer({
 
 
   return (
-    <section className="mt-5 min-w-0 rounded-2xl border border-amber-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="mt-5 min-w-0 rounded-2xl border border-dashboard-border bg-white p-4 shadow-sm sm:p-5">
       <h3 className="break-words text-base font-bold leading-6 text-stone-900">
         {chart.title}
       </h3>

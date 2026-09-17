@@ -1,16 +1,14 @@
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
-from sqlalchemy import update
-from sqlalchemy import update
+from sqlalchemy import update, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from zstandard import backend
 
 from backend.database import get_db
 from backend.models.user import User
 from backend.models.user_session import UserSession
 from backend.schemas.auth import (
     AuthResponse,
-    MessageResponse,
+    GuestWorkspaceTransferRequest,
     MessageResponse,
     SigninRequest,
     SignupRequest,
@@ -23,7 +21,12 @@ from datetime import datetime, timezone
 from backend.services.auth_rate_limiter import enforce_auth_limit
 from backend.app.auth_security import require_auth_origin
 from sqlalchemy import select
-from backend.app.auth_dependencies import get_current_user
+from backend.app.auth_dependencies import get_current_user, get_workspace_owner_id
+from backend.app.anonymous_identity import ANONYMOUS_COOKIE_NAME, read_signed_owner_cookie
+from backend.models.dataset import Dataset
+from backend.models.dashboard import Dashboard
+from backend.services.workspace_transfer import transfer_guest_workspace
+import uuid
 
 router = APIRouter(
     prefix="/auth",
@@ -175,3 +178,46 @@ def get_me(
     return AuthResponse(
         user=UserResponse.model_validate(user),
     )
+
+@router.get("/workspace")
+def workspace_identity(
+    response: Response,
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    return {"owner_id": str(owner_id)}
+
+
+@router.get("/guest-workspace")
+def guest_workspace_summary(
+    response: Response,
+    user: User = Depends(get_current_user),
+    device_cookie: str | None = Cookie(default=None, alias=ANONYMOUS_COOKIE_NAME),
+    db: Session = Depends(get_db),
+) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    guest_id = read_signed_owner_cookie(device_cookie)
+    if guest_id is None or guest_id == user.id:
+        return {"datasets": 0, "dashboards": 0}
+    datasets = db.scalar(select(func.count()).select_from(Dataset).where(Dataset.owner_id == guest_id))
+    dashboards = db.scalar(select(func.count()).select_from(Dashboard).join(Dataset, Dataset.id == Dashboard.dataset_id).where(
+        Dashboard.owner_id == guest_id, Dataset.owner_id == guest_id))
+    return {"datasets": datasets, "dashboards": dashboards}
+
+
+@router.post("/guest-workspace/transfer")
+def transfer_guest_workspace_endpoint(
+    data: GuestWorkspaceTransferRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+    device_cookie: str | None = Cookie(default=None, alias=ANONYMOUS_COOKIE_NAME),
+    db: Session = Depends(get_db),
+) -> dict:
+    guest_id = read_signed_owner_cookie(device_cookie)
+    if guest_id is None or guest_id == user.id:
+        raise HTTPException(status_code=409, detail="No guest workspace is available to move.")
+    if data.expected_account_id != user.id:
+        raise HTTPException(status_code=409, detail="Your account changed. Refresh before moving guest data.")
+    result = transfer_guest_workspace(db, guest_id, user.id)
+    response.delete_cookie(ANONYMOUS_COOKIE_NAME, path="/", httponly=True, samesite="lax")
+    return result

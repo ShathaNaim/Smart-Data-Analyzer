@@ -2,12 +2,13 @@ import math
 import logging
 import os
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.anonymous_identity import get_anonymous_owner_id
+from backend.app.auth_dependencies import get_workspace_owner_id
 from backend.database import get_db
 from backend.models.dataset import Dataset
 from backend.models.dataset_transformation import DatasetTransformation
@@ -43,9 +44,9 @@ router = APIRouter(
 def list_datasets_endpoint(
     limit: int = Query(default=5, ge=1, le=50),
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> list[Dataset]:
-    """Return the current browser's most recently uploaded datasets."""
+    """Return the current workspace's most recently uploaded datasets."""
 
     statement = (
         select(Dataset)
@@ -64,7 +65,7 @@ def list_datasets_endpoint(
 def delete_dataset_endpoint(
     dataset_id: uuid.UUID,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> None:
     """Delete an owned dataset, its dependent records, and its stored file."""
     try:
@@ -101,10 +102,10 @@ def delete_dataset_endpoint(
 @router.get("/{dataset_id}", response_model=DatasetDetailResponse)
 def get_dataset_endpoint(
     dataset_id: uuid.UUID,
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=5, le=100),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=5, le=100)] = 20,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> DatasetDetailResponse:
     try:
         dataset = get_owned_dataset(db, dataset_id, owner_id)
@@ -137,6 +138,35 @@ def get_dataset_endpoint(
     )
 
 
+@router.get("/{dataset_id}/filter-values")
+def filter_values_endpoint(
+    dataset_id: uuid.UUID,
+    column: str,
+    search: str = "",
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=200),
+    db: Session = Depends(get_db),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
+) -> dict:
+    try:
+        dataset = get_owned_dataset(db, dataset_id, owner_id)
+        df = load_working_dataset(dataset)
+        if column not in df.columns:
+            raise HTTPException(status_code=422, detail="Column no longer exists.")
+        values = df[[column]].dropna().drop_duplicates()
+        if search:
+            values = values.loc[values[column].astype("string").str.contains(search, case=False, regex=False, na=False)]
+        return {
+            "values": [row[column] for row in json_safe_records(values.iloc[offset:offset + limit])],
+            "has_more": offset + limit < len(values),
+            "has_missing": bool(df[column].isna().any()),
+        }
+    except DatasetAccessError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except TransformationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
 @router.post(
     "/{dataset_id}/transformations/preview",
 )
@@ -144,7 +174,9 @@ def preview_transformation_endpoint(
     dataset_id: uuid.UUID,
     data: TransformationCreate,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=5, le=100)] = 20,
 ) -> dict:
     try:
         dataset = get_owned_dataset(db, dataset_id, owner_id)
@@ -154,6 +186,9 @@ def preview_transformation_endpoint(
         )
         after = apply_transformations(before, [candidate])
         if data.transformation_type == "filter_rows":
+            total_pages = max(1, math.ceil(len(after) / page_size))
+            safe_page = min(page, total_pages)
+            start = (safe_page - 1) * page_size
             excluded = before.loc[
                 ~before.index.isin(after.index)
             ]
@@ -172,6 +207,9 @@ def preview_transformation_endpoint(
                     excluded.head(5)
                 ),
                 "can_apply": len(after) > 0,
+                "preview": json_safe_records(after.iloc[start:start + page_size]),
+                "page": safe_page,
+                "total_pages": total_pages,
             }
         if data.transformation_type == "hide_column":
             return {
@@ -215,7 +253,7 @@ def create_transformation_endpoint(
     dataset_id: uuid.UUID,
     data: TransformationCreate,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> TransformationResponse:
     requires_preview = (
         data.column_names is not None
@@ -275,7 +313,7 @@ def undo_transformation_endpoint(
     dataset_id: uuid.UUID,
     transformation_id: uuid.UUID,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> None:
     try:
         db.execute(select(Dataset.id).where(Dataset.id == dataset_id, Dataset.owner_id == owner_id).with_for_update())

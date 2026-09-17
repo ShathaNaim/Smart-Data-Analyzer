@@ -8,7 +8,20 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from backend.schemas.question import ChartSpec, KpiSpec
 
-
+DashboardTheme = Literal[
+    "orange",
+    "blue",
+    "green",
+    "purple",
+    "neutral",
+    "teal",
+    "cyan",
+    "pink",
+    "rose",
+    "red",
+    "indigo",
+    "yellow",
+]
 class DashboardSchema(BaseModel):
     """Base configuration shared by all dashboard schemas."""
 
@@ -110,6 +123,8 @@ class DashboardSave(DashboardSchema):
         max_length=255,
     )
 
+    theme: DashboardTheme = "orange"
+
     items: list[DashboardItemSave] = Field(
         default_factory=list,
         max_length=50,
@@ -139,6 +154,7 @@ class DashboardResponse(DashboardSchema):
     id: uuid.UUID
     dataset_id: uuid.UUID
     name: str
+    theme: DashboardTheme
     items: list[DashboardItemResponse]
     created_at: datetime
     updated_at: datetime

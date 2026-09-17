@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiUrl } from "../lib/api";
+import { announceWorkspaceChange } from "../lib/workspace";
+
+import GuestWorkspaceTransfer from "./GuestWorkspaceTransfer";
 
 type Account = { id: string; email: string };
 
@@ -60,6 +63,7 @@ export default function AccountControls() {
         throw new Error(typeof data?.detail === "string" ? data.detail : "Could not log out. Please try again.");
       }
       // Discard loaded analysis and pending requests after changing identity.
+      announceWorkspaceChange();
       window.location.replace("/?new=1");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not log out. Please try again.");
@@ -100,6 +104,7 @@ export default function AccountControls() {
           </>
         )}
       </div>
+      {account && <GuestWorkspaceTransfer accountId={account.id} email={account.email} />}
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
     </nav>
   );

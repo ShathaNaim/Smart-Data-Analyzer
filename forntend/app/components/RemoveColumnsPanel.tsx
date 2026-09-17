@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { apiUrl } from "../lib/api";
+import { apiUrl, workspaceFetch } from "../lib/api";
 
 type RemovalPreview = {
   removed_columns: string[];
@@ -26,7 +26,7 @@ export default function RemoveColumnsPanel({ datasetId, columns, busy, setBusy, 
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch(apiUrl(`/datasets/${datasetId}/transformations${apply ? "" : "/preview"}`), {
+      const response = await workspaceFetch(apiUrl(`/datasets/${datasetId}/transformations${apply ? "" : "/preview"}`), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

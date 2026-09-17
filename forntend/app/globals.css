@@ -10,6 +10,11 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-dashboard-background: var(--dashboard-background, var(--color-amber-50));
+  --color-dashboard-soft: var(--dashboard-soft, var(--color-amber-100));
+  --color-dashboard-border: var(--dashboard-border, var(--color-amber-200));
+  --color-dashboard-accent: var(--dashboard-accent, var(--color-amber-700));
+  --color-dashboard-accent-hover: var(--dashboard-accent-hover, var(--color-amber-800));
 }
 
 @media (prefers-color-scheme: dark) {

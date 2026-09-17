@@ -9,11 +9,16 @@ import ChartRenderer, {
 import KpiCard, {
   type KpiSpec,
 } from "../../components/KpiCard";
-import { apiUrl } from "../../lib/api";
+import { apiUrl, workspaceFetch } from "../../lib/api";
 import { createPiePalette } from "../../lib/chartColors";
 import ChartTextEditor from "../../components/ChartTextEditor";
 import type { ChartText } from "../../components/ChartRenderer";
-
+import {
+  dashboardThemes,
+  dashboardThemeStyle,
+  resolveDashboardTheme,
+  type DashboardTheme,
+} from "../../lib/dashboardThemes";
 
 type DashboardItem = {
   id: string;
@@ -34,6 +39,7 @@ type Dashboard = {
   id: string;
   dataset_id: string;
   name: string;
+  theme: DashboardTheme;
   items: DashboardItem[];
   created_at: string;
   updated_at: string;
@@ -80,7 +86,7 @@ const CHART_WIDTH_CLASSES: Record<number, string> = {
 
 const sizeButtonClass = (selected: boolean) =>
   selected
-    ? "rounded-md bg-amber-400 px-3 py-1.5 text-xs font-bold text-stone-900 shadow-sm"
+    ? "rounded-md bg-dashboard-accent px-3 py-1.5 text-xs font-bold text-white shadow-sm"
     : "rounded-md px-3 py-1.5 text-xs font-semibold text-stone-600 transition hover:bg-white";
 
 
@@ -105,7 +111,7 @@ export default function DashboardEditor({
       setError(null);
 
       try {
-        const response = await fetch(
+        const response = await workspaceFetch(
           apiUrl(`/dashboards/${dashboardId}`),
           { signal: controller.signal, credentials: "include" },
         );
@@ -221,7 +227,7 @@ export default function DashboardEditor({
     setSavedMessage(null);
 
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/dashboards/${dashboard.id}`),
         {
           method: "PUT",
@@ -231,6 +237,7 @@ export default function DashboardEditor({
           },
           body: JSON.stringify({
             name: dashboard.name,
+            theme: resolveDashboardTheme(dashboard.theme),
             items: dashboard.items.map((item) => ({
               id: item.id,
               title: item.title,
@@ -286,7 +293,7 @@ export default function DashboardEditor({
     setShareCopied(false);
 
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/dashboards/${dashboard.id}/share`),
         {
           method: "POST",
@@ -493,11 +500,14 @@ function RightArrowIcon() {
             firstItem.position_y - secondItem.position_y,
         );
   return (
-    <main className="min-h-screen bg-amber-50 px-5 py-8 text-stone-900 sm:px-8">
+        <main
+          style={dashboardThemeStyle(dashboard.theme)}
+          className="min-h-screen bg-dashboard-background px-5 py-8 text-stone-900 sm:px-8"
+    >
       <section className="mx-auto max-w-6xl">
-        <header className="flex flex-col gap-4 rounded-2xl border border-amber-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+        <header className="flex flex-col gap-4 rounded-2xl border border-dashboard-border bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0 flex-1">
-            <label className="text-xs font-bold uppercase tracking-widest text-amber-700" htmlFor="dashboard-name">
+            <label className="text-xs font-bold uppercase tracking-widest text-dashboard-accent" htmlFor="dashboard-name">
               Dashboard name
             </label>
             <input
@@ -507,13 +517,13 @@ function RightArrowIcon() {
                 setDashboard({ ...dashboard, name: event.target.value });
                 setSavedMessage(null);
               }}
-              className="mt-1 block w-full rounded-lg border border-amber-200 px-3 py-2 text-2xl font-black outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+              className="mt-1 block w-full rounded-lg border border-dashboard-border px-3 py-2 text-2xl font-black outline-none focus:border-dashboard-accent focus:ring-4 focus:ring-dashboard-soft"
             />
           </div>
           <div className="flex flex-wrap gap-3">
             <Link
               href={`/?dataset=${dashboard.dataset_id}&dashboard=${dashboard.id}`}
-              className="rounded-xl border border-amber-300 px-4 py-3 font-bold text-amber-800 transition hover:bg-amber-50"
+              className="rounded-xl border border-dashboard-border px-4 py-3 font-bold text-dashboard-accent transition hover:bg-dashboard-soft"
             >
               Add chart or KPI
             </Link>
@@ -529,12 +539,45 @@ function RightArrowIcon() {
               type="button"
               onClick={() => void saveDashboard()}
               disabled={saving || !dashboard.name.trim()}
-              className="rounded-xl bg-stone-900 px-5 py-3 font-bold text-white transition hover:bg-amber-500 hover:text-stone-950 disabled:cursor-not-allowed disabled:bg-stone-300"
+              className="rounded-xl bg-dashboard-accent px-5 py-3 font-bold text-white transition hover:bg-dashboard-accent-hover disabled:cursor-not-allowed disabled:bg-stone-300"
             >
               {saving ? "Saving..." : "Save dashboard"}
             </button>
           </div>
         </header>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+          <label
+            htmlFor="dashboard-theme"
+            className="text-sm font-bold text-dashboard-accent"
+          >
+            Dashboard theme
+          </label>
+
+          <select
+            id="dashboard-theme"
+            value={resolveDashboardTheme(dashboard.theme)}
+            disabled={saving}
+            onChange={(event) => {
+              const theme = resolveDashboardTheme(event.target.value);
+
+              setDashboard((current) =>
+                current ? { ...current, theme } : current,
+              );
+              setSavedMessage(null);
+            }}
+            className="rounded-lg border border-dashboard-border bg-white px-3 py-2 text-sm text-stone-900 focus-visible:outline-2 focus-visible:outline-dashboard-accent disabled:opacity-50"
+          >
+            {Object.entries(dashboardThemes).map(([value, palette]) => (
+              <option key={value} value={value}>
+                {palette.label}
+              </option>
+            ))}
+          </select>
+
+          <span className="text-xs text-stone-500">
+            Preview instantly. Use Save dashboard to keep your choice.
+          </span>
+        </div>
 
         {(shareUrl || shareError) && (
           <section className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
@@ -581,9 +624,9 @@ function RightArrowIcon() {
         )}
 
         {dashboard.items.length === 0 ? (
-          <div className="mt-6 rounded-2xl border-2 border-dashed border-amber-300 bg-white/70 p-12 text-center">
+          <div className="mt-6 rounded-2xl border-2 border-dashed border-dashboard-border bg-white/70 p-12 text-center">
             <p className="font-bold text-stone-800">This dashboard is empty.</p>
-            <Link href={`/?dataset=${dashboard.dataset_id}&dashboard=${dashboard.id}`} className="mt-2 inline-block text-sm font-semibold text-amber-700">
+            <Link href={`/?dataset=${dashboard.dataset_id}&dashboard=${dashboard.id}`} className="mt-2 inline-block text-sm font-semibold text-dashboard-accent">
               Generate and add a chart or KPI
             </Link>
           </div>
@@ -601,7 +644,7 @@ function RightArrowIcon() {
 
 
                        <div
-                              className="flex rounded-lg border border-amber-200 bg-white p-1"
+                              className="flex rounded-lg border border-dashboard-border bg-white p-1"
                               aria-label={`Reorder ${item.title}`}
                             >
                               <button
@@ -610,7 +653,7 @@ function RightArrowIcon() {
                                 disabled={index === 0}
                                 aria-label={`Move ${item.title} left`}
                                 title="Move left"
-                                className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-amber-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+                                className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-dashboard-soft hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
                               >
                                 <LeftArrowIcon />
                               </button>
@@ -621,13 +664,13 @@ function RightArrowIcon() {
                                 disabled={index === kpiItems.length - 1}
                                 aria-label={`Move ${item.title} right`}
                                 title="Move right"
-                                className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-amber-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+                                className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-dashboard-soft hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
                               >
                                 <RightArrowIcon />
                               </button>
                             </div>
                       <div className="mb-2 flex items-center justify-between gap-2">
-                        <div className="flex rounded-lg bg-amber-100/70 p-1" aria-label="KPI size">
+                        <div className="flex rounded-lg bg-dashboard-soft p-1" aria-label="KPI size">
                           <button
                             type="button"
                             onClick={() => changeItemWidth(item.id, 3)}
@@ -668,7 +711,7 @@ function RightArrowIcon() {
             {chartItems.map((item, index) => (
               <article
                 key={item.id}
-                className={`${CHART_WIDTH_CLASSES[item.width] ?? CHART_WIDTH_CLASSES[6]} rounded-2xl border border-amber-200 bg-white p-4 shadow-sm`}
+                className={`${CHART_WIDTH_CLASSES[item.width] ?? CHART_WIDTH_CLASSES[6]} rounded-2xl border border-dashboard-border bg-white p-4 shadow-sm`}
               >
 
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -685,7 +728,7 @@ function RightArrowIcon() {
                             event.target.value as EditableChartType,
                           )
                         }
-                        className="mt-1 block rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-100"
+                        className="mt-1 block rounded-lg border border-dashboard-border bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal outline-none focus:border-dashboard-accent focus:ring-4 focus:ring-dashboard-soft"
                       >
                         <option value="bar">Bar</option>
                         <option value="line">Line</option>
@@ -721,7 +764,7 @@ function RightArrowIcon() {
                               event.target.value,
                             )
                           }
-                          className="mt-1 block h-10 w-16 cursor-pointer rounded-lg border border-amber-200 bg-white p-1"
+                          className="mt-1 block h-10 w-16 cursor-pointer rounded-lg border border-dashboard-border bg-white p-1"
                         />
                       </label>
                     ))}
@@ -729,7 +772,7 @@ function RightArrowIcon() {
                   )}
                   <div className="flex items-center gap-2">
                     <div
-                      className="flex rounded-lg border border-amber-200 bg-white p-1"
+                      className="flex rounded-lg border border-dashboard-border bg-white p-1"
                       aria-label={`Reorder ${item.title}`}
                     >
                       <button
@@ -738,7 +781,7 @@ function RightArrowIcon() {
                         disabled={index === 0}
                         aria-label={`Move ${item.title} earlier`}
                         title="Move left"
-                        className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-amber-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-dashboard-soft hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         <LeftArrowIcon />
                       </button>
@@ -748,12 +791,12 @@ function RightArrowIcon() {
                         disabled={index === chartItems.length - 1}
                         aria-label={`Move ${item.title} later`}
                         title="Move right"
-                        className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-amber-100 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="grid h-8 w-8 place-items-center rounded-md text-stone-600 transition hover:bg-dashboard-soft hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         <RightArrowIcon />
                       </button>
                     </div>
-                    <div className="flex rounded-lg bg-amber-100/70 p-1" aria-label="Chart size">
+                    <div className="flex rounded-lg bg-dashboard-soft p-1" aria-label="Chart size">
                       <button
                         type="button"
                         onClick={() => changeItemWidth(item.id, 6)}

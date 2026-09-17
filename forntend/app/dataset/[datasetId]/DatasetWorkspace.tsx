@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import AppSidebar from "../../components/AppSidebar";
 import RemoveColumnsPanel from "../../components/RemoveColumnsPanel";
-import DataValue from "../../components/DataValue";
-import { apiUrl } from "../../lib/api";
-import DatasetFilterPanel from "../../components/DatasetFilterPanel";
+
+import { apiUrl, workspaceFetch } from "../../lib/api";
+import DatasetFilterTable from "../../components/DatasetFilterTable";
 
 type Transformation = {
   id: string;
@@ -81,7 +81,7 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/datasets/${datasetId}?page=${requestedPage}&page_size=20`),
         { credentials: "include" },
       );
@@ -126,7 +126,7 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
     }
 
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/datasets/${datasetId}/transformations`),
         {
           method: "POST",
@@ -153,7 +153,7 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/datasets/${datasetId}/transformations/${latest.id}`),
         { method: "DELETE", credentials: "include" },
       );
@@ -201,48 +201,15 @@ export default function DatasetWorkspace({ datasetId }: { datasetId: string }) {
               </header>
 
               <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-                <section className="min-w-0 rounded-2xl border border-stone-200 bg-white shadow-sm">
-                  <div className="flex items-center justify-between border-b border-stone-200 px-5 py-4">
-                    <div>
-                      <h2 className="font-black">Data preview</h2>
-                      <p className="text-xs text-stone-500">Showing 20 rows per page</p>
-                    </div>
-                    {loading && <span className="text-xs font-semibold text-amber-700">Refreshing...</span>}
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-left text-sm">
-                      <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
-                        <tr>{dataset.columns.map((column) => <th key={column} className="whitespace-nowrap px-4 py-3">{column}</th>)}</tr>
-                      </thead>
-                      <tbody className="divide-y divide-stone-100">
-                        {dataset.preview.map((row, index) => (
-                          <tr key={index} className="hover:bg-amber-50/50">
-                            {dataset.columns.map((column) => (
-                              <td key={column} className="max-w-64 truncate whitespace-nowrap px-4 py-3 text-stone-700" title={String(row[column] ?? "")}>
-                                <DataValue value={row[column]} />
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-stone-200 px-5 py-4 text-sm">
-                    <button className="rounded-lg border px-3 py-2 font-semibold disabled:opacity-40" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>Previous</button>
-                    <span className="text-stone-500">Page {dataset.page} of {dataset.total_pages}</span>
-                    <button className="rounded-lg border px-3 py-2 font-semibold disabled:opacity-40" disabled={page >= dataset.total_pages || loading} onClick={() => setPage((value) => value + 1)}>Next</button>
-                  </div>
-                </section>
+                <DatasetFilterTable
+                  key={`${dataset.id}:${dataset.transformations.map((item) => item.id).join(",")}`}
+                  datasetId={datasetId} columns={dataset.columns} rows={dataset.preview}
+                  page={dataset.page} totalPages={dataset.total_pages} rowCount={dataset.row_count}
+                  disabled={saving || loading} onPage={setPage}
+                  onBusyChange={setSaving} onApplied={() => loadDataset(1)}
+                />
 
                 <aside className="space-y-6">
-                  <DatasetFilterPanel
-                    key={`${dataset.id}:${dataset.transformations.map((item) => item.id).join(",")}`}
-                    disabled={saving || loading}
-                    onBusyChange={setSaving}
-                    datasetId={datasetId}
-                    columns={dataset.columns}
-                    onApplied={() => loadDataset(1)}
-                  />
                   <section className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
                     <h2 className="font-black">Transform data</h2>
                     <div className="mt-4 grid grid-cols-3 rounded-xl bg-stone-100 p-1 text-xs font-bold">

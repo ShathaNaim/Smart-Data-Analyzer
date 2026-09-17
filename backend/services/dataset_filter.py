@@ -36,6 +36,16 @@ def build_filter_mask(
     if condition.operator == "in":
         return column.notna() & column.isin(condition.value)
 
+    if condition.operator == "none_of":
+        return (column.notna() & ~column.isin(condition.value)) | (
+            column.isna() & condition.include_missing
+        )
+
+    if condition.operator == "one_of":
+        return (column.notna() & column.isin(condition.value)) | (
+            column.isna() & condition.include_missing
+        )
+
     if condition.operator in ("gt", "gte", "lt", "lte", "between"):
         if (
             not pd.api.types.is_numeric_dtype(column)

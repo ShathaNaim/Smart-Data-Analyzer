@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { apiUrl } from "../lib/api";
+import { announceWorkspaceChange } from "../lib/workspace";
 
 export default function SigninPage() {
   const [email, setEmail] = useState("");
@@ -45,6 +46,7 @@ export default function SigninPage() {
       }
 
       // Reload the app so previous guest UI state is discarded.
+      announceWorkspaceChange();
       window.location.replace("/");
     } catch (error) {
       setError(

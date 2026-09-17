@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiUrl } from "../lib/api";
+import { apiUrl, workspaceFetch } from "../lib/api";
 
 type Preview = {
   rows_before: number;
@@ -27,7 +27,7 @@ export default function DataCleaningPanel({ datasetId, columns, disabled }: {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(apiUrl(`/datasets/${datasetId}`), { credentials: "include", signal: controller.signal })
+    workspaceFetch(apiUrl(`/datasets/${datasetId}`), { credentials: "include", signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error("Could not load cleaning history.");
         const data = await response.json();
@@ -44,7 +44,7 @@ export default function DataCleaningPanel({ datasetId, columns, disabled }: {
     setError(null);
     try {
       const suffix = action === "preview" ? "/preview" : action === "undo" ? `/${latest?.id}` : "";
-      const response = await fetch(apiUrl(`/datasets/${datasetId}/transformations${suffix}`), {
+      const response = await workspaceFetch(apiUrl(`/datasets/${datasetId}/transformations${suffix}`), {
         method: action === "undo" ? "DELETE" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

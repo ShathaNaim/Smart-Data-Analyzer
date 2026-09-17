@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.app.anonymous_identity import get_anonymous_owner_id
+from backend.app.auth_dependencies import get_workspace_owner_id
 from backend.schemas.dashboard import (
     DashboardCreate,
     DashboardResponse,
@@ -36,7 +36,7 @@ router = APIRouter(
 def create_dashboard_endpoint(
     data: DashboardCreate,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> DashboardResponse:
     try:
         dashboard = create_dashboard(db, data, owner_id)
@@ -56,7 +56,7 @@ def create_dashboard_endpoint(
 def get_dashboard_endpoint(
     dashboard_id: uuid.UUID,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> DashboardResponse:
     try:
         dashboard = get_dashboard(db, dashboard_id, owner_id)
@@ -77,7 +77,7 @@ def save_dashboard_endpoint(
     dashboard_id: uuid.UUID,
     data: DashboardSave,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> DashboardResponse:
     try:
         dashboard = save_dashboard(db, dashboard_id, data, owner_id)
@@ -95,7 +95,7 @@ def list_dashboards_endpoint(
     db: Session = Depends(get_db),
     limit: int = 5,
     dataset_id: uuid.UUID | None = None,
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> list[DashboardSummaryResponse]:
     return list_dashboards(db, owner_id, limit, dataset_id)
 
@@ -106,7 +106,7 @@ def list_dashboards_endpoint(
 def delete_dashboard_endpoint(
     dashboard_id: uuid.UUID,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> None:
     try:
         dashboard = get_dashboard(db, dashboard_id, owner_id)

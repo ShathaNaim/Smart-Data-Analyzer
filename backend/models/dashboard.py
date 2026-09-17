@@ -56,3 +56,10 @@ class Dashboard(Base):
         nullable=True,
         index=True,
     )
+    
+    theme: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="orange",
+        server_default="orange",
+    )

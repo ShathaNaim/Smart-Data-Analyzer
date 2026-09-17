@@ -10,7 +10,7 @@ from typing import Generator
 
 from fastapi import Depends, HTTPException, Response, status
 
-from backend.app.anonymous_identity import get_anonymous_owner_id
+from backend.app.auth_dependencies import get_workspace_owner_id
 from backend.config import get_settings
 
 
@@ -122,7 +122,7 @@ ai_usage_limiter = InMemoryAIUsageLimiter(
 
 def enforce_ai_usage_limit(
     response: Response,
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> Generator[None, None, None]:
     try:
         usage_status = ai_usage_limiter.acquire(owner_id)

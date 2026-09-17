@@ -13,7 +13,7 @@ import AccountControls from "./components/AccountControls";
 import DataCleaningPanel from "./components/DataCleaningPanel";
 import DataValue from "./components/DataValue";
 import ManualChartBuilder from "./components/ManualChartBuilder";
-import { apiUrl } from "./lib/api";
+import { apiUrl, workspaceFetch } from "./lib/api";
 
 import type {
   AnalysisSuggestions,
@@ -228,7 +228,7 @@ export default function Home() {
       let currentDashboard: SavedDashboard | null = null;
 
       if (storedDashboardId) {
-        const response = await fetch(
+        const response = await workspaceFetch(
           apiUrl(`/dashboards/${storedDashboardId}`),
           { credentials: "include" },
         );
@@ -249,7 +249,7 @@ export default function Home() {
       }
 
       if (!currentDashboard) {
-        const response = await fetch(
+        const response = await workspaceFetch(
           apiUrl("/dashboards"),
           {
             method: "POST",
@@ -322,7 +322,7 @@ export default function Home() {
             },
           ];
 
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/dashboards/${dashboard.id}`),
         {
           method: "PUT",
@@ -364,7 +364,7 @@ export default function Home() {
   setSuggestions(null);
 
   try {
-    const response = await fetch(
+    const response = await workspaceFetch(
       apiUrl(`/dataset/${result.file_id}/analysis-suggestions`),
       {
         method: "POST",
@@ -428,7 +428,7 @@ export default function Home() {
       );
     }
     try {
-      const response = await fetch(apiUrl("/upload"), {
+      const response = await workspaceFetch(apiUrl("/upload"), {
         method: "POST",
         credentials: "include",
         body: formData,
@@ -468,7 +468,7 @@ export default function Home() {
         setTargetDashboardId(requestedDashboardId);
         setLoading(true);
         setError(null);
-        void fetch(
+        void workspaceFetch(
           apiUrl(`/datasets/${requestedDatasetId}?page=1&page_size=20`),
           { credentials: "include" },
         )
@@ -567,7 +567,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
         apiUrl(`/dataset/${result.file_id}/summary`),
         { credentials: "include" },
       );
@@ -595,7 +595,7 @@ const handleColumnClick = async (column: string) => {
   setColumnDetails(null);
 
   try {
-    const response = await fetch(
+    const response = await workspaceFetch(
       apiUrl(`/dataset/${result.file_id}/column/${encodeURIComponent(column)}`),
       { credentials: "include" },
     );
@@ -643,7 +643,7 @@ const handleColumnClick = async (column: string) => {
     setWarnings([]);
 
     try {
-      const response = await fetch(
+      const response = await workspaceFetch(
       apiUrl(`/dataset/${result.file_id}/ask`),
         {
           method: "POST",
@@ -775,7 +775,7 @@ const handleColumnClick = async (column: string) => {
             kpi_plan: null,
           };
 
-    const response = await fetch(
+    const response = await workspaceFetch(
       apiUrl(`/dataset/${result.file_id}/suggestion-preview`),
       {
         method: "POST",

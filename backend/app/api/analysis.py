@@ -5,7 +5,7 @@ from backend.services.dataset_profiler import json_safe_value
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
-from backend.app.anonymous_identity import get_anonymous_owner_id
+from backend.app.auth_dependencies import get_workspace_owner_id
 from backend.database import get_db
 from backend.schemas.question import (
     ClarificationResponse,
@@ -66,7 +66,7 @@ def load_owned_dataset(
 def get_summary(
     file_id: str,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ):
     df, _ = load_owned_dataset(file_id, db, owner_id)
 
@@ -94,7 +94,7 @@ def get_semantic_profile(
     file_id: str,
     response: Response,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> SemanticDatasetProfile:
     """
     Generate a validated semantic profile for an uploaded dataset.
@@ -123,7 +123,7 @@ def get_column_summary(
     file_id: str,
     column_name: str,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ):
     df, _ = load_owned_dataset(file_id, db, owner_id)
 
@@ -166,7 +166,7 @@ def ask_dataset(
     file_id: str,
     request: QuestionRequest,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
     _ai_usage: None = Depends(enforce_ai_usage_limit),
 ):
     df, dataset_description = load_owned_dataset(file_id, db, owner_id)
@@ -262,7 +262,7 @@ def get_analysis_suggestions(
     file_id: str,
     response: Response,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> AnalysisSuggestions:
     """
     Generate validated KPI and chart suggestions for an uploaded dataset.
@@ -299,7 +299,7 @@ def preview_analysis_suggestion(
     file_id: str,
     request: SuggestionPreviewRequest,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> SuggestionPreviewResponse:
     """
     Safely execute one selected KPI or chart suggestion.

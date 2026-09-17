@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models.dataset import Dataset
-from backend.app.anonymous_identity import get_anonymous_owner_id
+from backend.app.auth_dependencies import get_workspace_owner_id
 from backend.services.object_storage import (
     ObjectStorageError,
     delete_object,
@@ -29,7 +29,7 @@ async def upload_file(
     file: UploadFile = File(...),
     description: str | None = Form(default=None),
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id)
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id)
 ):
     clean_description = (
         description.strip()

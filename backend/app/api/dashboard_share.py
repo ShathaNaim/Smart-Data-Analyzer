@@ -13,7 +13,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.app.anonymous_identity import get_anonymous_owner_id
+from backend.app.auth_dependencies import get_workspace_owner_id
 from backend.schemas.dashboard_share import (
     DashboardShareCreate,
     DashboardShareCreatedResponse,
@@ -43,7 +43,7 @@ def create_dashboard_share_endpoint(
     dashboard_id: uuid.UUID,
     data: DashboardShareCreate,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> DashboardShareCreatedResponse:
     try:
         share_link, raw_token = create_dashboard_share_link(
@@ -72,7 +72,7 @@ def create_dashboard_share_endpoint(
 def revoke_dashboard_share_endpoint(
     dashboard_id: uuid.UUID,
     db: Session = Depends(get_db),
-    owner_id: uuid.UUID = Depends(get_anonymous_owner_id),
+    owner_id: uuid.UUID = Depends(get_workspace_owner_id),
 ) -> DashboardShareRevokedResponse:
     try:
         revoke_dashboard_share_links(
