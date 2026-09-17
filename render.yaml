@@ -24,10 +24,6 @@ services:
         generateValue: true
       - key: COOKIE_SECURE
         value: "true"
-      - key: CORS_ORIGINS
-        value: '[]'
-      - key: AUTH_ALLOWED_ORIGINS
-        sync: false
       - key: MAX_UPLOAD_SIZE_MB
         value: "3"
       - key: MAX_DATASET_ROWS
@@ -40,3 +36,7 @@ services:
         value: "30"
       - key: AI_CONCURRENT_REQUESTS
         value: "1"
+      - key: CORS_ORIGINS
+        value: '["https://smart-data-analyzer-c4w0peghd-shathanaims-projects.vercel.app"]'
+      - key: AUTH_ALLOWED_ORIGINS
+        value: '["https://smart-data-analyzer-c4w0peghd-shathanaims-projects.vercel.app"]'
