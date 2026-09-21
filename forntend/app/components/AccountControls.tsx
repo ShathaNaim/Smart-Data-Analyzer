@@ -15,6 +15,7 @@ export default function AccountControls() {
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [loggedOut, setLoggedOut] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -28,6 +29,7 @@ export default function AccountControls() {
         });
         if (response.status === 401) {
           setAccount(null);
+          setLoggedOut(new URLSearchParams(window.location.search).get("loggedOut") === "1");
           return;
         }
         if (!response.ok) throw new Error("Could not check sign-in status.");
@@ -64,7 +66,7 @@ export default function AccountControls() {
       }
       // Discard loaded analysis and pending requests after changing identity.
       announceWorkspaceChange();
-      window.location.replace("/?new=1");
+      window.location.replace("/?new=1&loggedOut=1");
     } catch (error) {
       setError(error instanceof Error ? error.message : "Could not log out. Please try again.");
       setSigningOut(false);
@@ -105,6 +107,11 @@ export default function AccountControls() {
         )}
       </div>
       {account && <GuestWorkspaceTransfer accountId={account.id} email={account.email} />}
+      {!loading && !account && loggedOut && (
+        <p role="status" className="mt-3 text-sm text-stone-600">
+          You’re now browsing as a guest. Your saved datasets and dashboards remain in your account. Sign in again to access them.
+        </p>
+      )}
       {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
     </nav>
   );

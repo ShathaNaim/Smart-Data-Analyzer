@@ -94,6 +94,7 @@ export default function DashboardEditor({
   dashboardId,
 }: DashboardEditorProps) {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +103,24 @@ export default function DashboardEditor({
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const hasUnsavedChanges = dashboard !== null && savedSnapshot !== null
+    && JSON.stringify(dashboard) !== savedSnapshot;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  const confirmNavigation = (event: { preventDefault: () => void }) => {
+    if (hasUnsavedChanges && !window.confirm("You have unsaved dashboard changes. Leave without saving?")) {
+      event.preventDefault();
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -122,6 +141,7 @@ export default function DashboardEditor({
         }
 
         setDashboard(data);
+        setSavedSnapshot(JSON.stringify(data));
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           return;
@@ -259,7 +279,9 @@ export default function DashboardEditor({
         throw new Error(data.detail || "Could not save the dashboard.");
       }
 
-      setDashboard(data);
+      // Keep edits made while the save request was in flight.
+      setDashboard((current) => current === dashboard ? data : current);
+      setSavedSnapshot(JSON.stringify(data));
       setSavedMessage("Dashboard saved.");
     } catch (error) {
       setError(
@@ -523,6 +545,7 @@ function RightArrowIcon() {
           <div className="flex flex-wrap gap-3">
             <Link
               href={`/?dataset=${dashboard.dataset_id}&dashboard=${dashboard.id}`}
+              onNavigate={confirmNavigation}
               className="rounded-xl border border-dashboard-border px-4 py-3 font-bold text-dashboard-accent transition hover:bg-dashboard-soft"
             >
               Add chart or KPI
@@ -617,7 +640,12 @@ function RightArrowIcon() {
             {error}
           </p>
         )}
-        {savedMessage && (
+        {hasUnsavedChanges && (
+          <p role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800">
+            Unsaved changes. Save your dashboard to keep your edits.
+          </p>
+        )}
+        {savedMessage && !hasUnsavedChanges && (
           <p role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
             {savedMessage}
           </p>
@@ -626,7 +654,7 @@ function RightArrowIcon() {
         {dashboard.items.length === 0 ? (
           <div className="mt-6 rounded-2xl border-2 border-dashed border-dashboard-border bg-white/70 p-12 text-center">
             <p className="font-bold text-stone-800">This dashboard is empty.</p>
-            <Link href={`/?dataset=${dashboard.dataset_id}&dashboard=${dashboard.id}`} className="mt-2 inline-block text-sm font-semibold text-dashboard-accent">
+            <Link href={`/?dataset=${dashboard.dataset_id}&dashboard=${dashboard.id}`} onNavigate={confirmNavigation} className="mt-2 inline-block text-sm font-semibold text-dashboard-accent">
               Generate and add a chart or KPI
             </Link>
           </div>

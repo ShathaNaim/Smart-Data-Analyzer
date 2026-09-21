@@ -114,6 +114,8 @@ class DashboardCreate(DashboardSchema):
         max_length=255,
     )
 
+    theme: DashboardTheme = "orange"
+
 
 class DashboardSave(DashboardSchema):
     """Request body for manually saving the complete dashboard."""
